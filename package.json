@@ -18,7 +18,8 @@
     "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:restart": "pm2 restart oss-ops",
     "pm2:stop": "pm2 stop oss-ops",
-    "pm2:logs": "pm2 logs oss-ops"
+    "pm2:logs": "pm2 logs oss-ops",
+    "restart": "npm run build && pm2 restart oss-ops"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
