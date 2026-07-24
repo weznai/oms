@@ -37,6 +37,7 @@ export default defineConfig({
     outDir: 'server/dist',
     emptyOutDir: true,
     sourcemap: false,
+    modulePreload: false,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
