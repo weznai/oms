@@ -136,10 +136,14 @@ a {
   padding: 0 7px;
 }
 
-/* 输入/选择器高度微调 */
+/* 输入/选择器恢复正常高度（默认 small 仅 24px，偏低） */
 .el-input__wrapper,
 .el-select__wrapper {
   font-size: 13px;
+  min-height: 32px;
+}
+.el-input__inner {
+  height: 32px !important;
 }
 
 /* 分页紧凑 */
