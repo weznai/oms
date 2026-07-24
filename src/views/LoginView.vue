@@ -84,8 +84,6 @@ async function handleLogin(): Promise<void> {
           登 录
         </el-button>
       </el-form>
-
-      <div class="tips">默认账号 admin / admin123（首次登录后请修改密码）</div>
     </div>
   </div>
 </template>
@@ -185,12 +183,5 @@ async function handleLogin(): Promise<void> {
   &:hover {
     opacity: 0.92;
   }
-}
-
-.tips {
-  margin-top: 20px;
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
 }
 </style>
