@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Download, Files, Box, Tools, Refresh, SwitchButton,
@@ -17,10 +16,9 @@ interface UpdateState {
   error: string | null; logs: UpdateLogLine[]
 }
 
-const route = useRoute()
+const props = defineProps<{ appId: number | null }>()
 const apps = ref<AppItem[]>([])
-const selectedAppId = ref<number | null>(null)
-const selectedApp = computed(() => apps.value.find((a) => a.id === selectedAppId.value) || null)
+const selectedApp = computed(() => apps.value.find((a) => a.id === props.appId) || null)
 
 const state = ref<UpdateState>(emptyState())
 const polling = ref<number | null>(null)
@@ -84,13 +82,6 @@ async function loadStatus(): Promise<void> {
 async function loadApps(): Promise<void> {
   const res = await appApi.list()
   apps.value = res.data
-  // 路由指定 appId 或选中第一个启用的
-  const qId = Number(route.query.appId)
-  if (qId && apps.value.some((a) => a.id === qId)) {
-    selectedAppId.value = qId
-  } else if (!selectedAppId.value && apps.value.length) {
-    selectedAppId.value = (apps.value.find((a) => a.enabled === 1) || apps.value[0]).id
-  }
 }
 
 async function loadConfig(): Promise<void> {
@@ -103,7 +94,7 @@ async function loadEnv(): Promise<void> {
   envInfo.value = res.data
 }
 
-watch(selectedAppId, () => { loadEnv() })
+watch(() => props.appId, () => { loadEnv() })
 
 function startPolling(): void {
   if (polling.value) return
@@ -229,38 +220,24 @@ onUnmounted(stopPolling)
 
 <template>
   <div class="update-page">
-    <h2 class="page-title">应用更新</h2>
-    <p class="page-subtitle">选择目标应用，执行下载→部署→安装→构建→重启/停止的完整运维流程</p>
-
-    <!-- 应用选择 -->
-    <el-card shadow="never" class="panel app-panel">
-      <div class="app-bar">
-        <div class="app-bar-left">
-          <div class="bar-label">目标应用</div>
-          <el-select v-model="selectedAppId" placeholder="选择要管理的应用" class="app-select-box">
-            <el-option v-for="a in apps" :key="a.id" :value="a.id" :label="a.display_name || a.name" :disabled="a.enabled !== 1">
-              <span style="float:left">{{ a.display_name || a.name }}</span>
-              <span style="float:right;color:#909399;font-size:12px">{{ a.type === 'python' ? 'Python' : 'Node.js' }}</span>
-            </el-option>
-          </el-select>
+    <!-- 应用信息 -->
+    <el-card v-if="selectedApp" shadow="never" class="panel">
+      <div class="app-info-bar">
+        <div class="info-tags">
+          <el-tag size="small" :type="selectedApp.type === 'python' ? 'warning' : selectedApp.type === 'java' ? 'danger' : 'success'">
+            {{ selectedApp.type === 'python' ? 'Python' : selectedApp.type === 'java' ? 'Java' : 'Node.js' }}
+          </el-tag>
+          <el-tag size="small" type="info" effect="plain">{{ selectedApp.scope === 'internal' ? '内部' : '外部' }}</el-tag>
+          <el-tag v-if="selectedApp.port" size="small" type="primary" effect="plain">端口 {{ selectedApp.port }}</el-tag>
+          <el-tag size="small" :type="selectedApp.enabled === 1 ? 'success' : 'info'" effect="plain">
+            {{ selectedApp.enabled === 1 ? '已启用' : '已停用' }}
+          </el-tag>
         </div>
-        <div v-if="selectedApp" class="app-bar-info">
-          <div class="info-tags">
-            <el-tag size="small" :type="selectedApp.type === 'python' ? 'warning' : 'success'">
-              {{ selectedApp.type === 'python' ? 'Python' : 'Node.js' }}
-            </el-tag>
-            <el-tag size="small" type="info" effect="plain">{{ selectedApp.scope === 'internal' ? '内部' : '外部' }}</el-tag>
-            <el-tag v-if="selectedApp.port" size="small" type="primary" effect="plain">端口 {{ selectedApp.port }}</el-tag>
-            <el-tag size="small" :type="selectedApp.enabled === 1 ? 'success' : 'info'" effect="plain">
-              {{ selectedApp.enabled === 1 ? '已启用' : '已停用' }}
-            </el-tag>
-          </div>
-          <div class="info-meta">
-            <span class="meta-item"><span class="meta-k">PM2</span><span class="meta-v">{{ selectedApp.pm2_app_name || '-' }}</span></span>
-            <span class="meta-item" v-if="selectedApp.repo_url">
-              <span class="meta-k">仓库</span><span class="meta-v repo-v">{{ selectedApp.repo_url }} ({{ selectedApp.branch }})</span>
-            </span>
-          </div>
+        <div class="info-meta">
+          <span class="meta-item"><span class="meta-k">PM2</span><span class="meta-v">{{ selectedApp.pm2_app_name || '-' }}</span></span>
+          <span class="meta-item" v-if="selectedApp.repo_url">
+            <span class="meta-k">仓库</span><span class="meta-v repo-v">{{ selectedApp.repo_url }} ({{ selectedApp.branch }})</span>
+          </span>
         </div>
       </div>
     </el-card>
@@ -311,7 +288,7 @@ onUnmounted(stopPolling)
       </div>
     </el-card>
 
-    <el-empty v-else description="请先在「应用管理」注册并选择一个应用" />
+    <el-empty v-else description="未选择应用" />
 
     <!-- 更新日志 -->
     <el-card v-if="selectedApp" shadow="never" class="panel">
@@ -408,14 +385,10 @@ onUnmounted(stopPolling)
   }
   .app-select-box { width: 240px; }
 }
-.app-bar-info {
-  flex: 1;
-  min-width: 260px;
+.app-info-bar {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-left: 24px;
-  border-left: 1px solid var(--border-light);
   .info-tags { display: flex; gap: 6px; flex-wrap: wrap; }
   .info-meta { display: flex; gap: 22px; flex-wrap: wrap; }
   .meta-item { display: flex; align-items: baseline; gap: 6px; }

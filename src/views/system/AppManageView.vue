@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, SetUp } from '@element-plus/icons-vue'
 import { appApi, type AppItem, type AppInput, type AppType } from '@/api/app'
+import SystemUpdateView from './SystemUpdateView.vue'
 
-const router = useRouter()
 const list = ref<AppItem[]>([])
 const loading = ref(false)
 const templates = ref<Record<string, any>>({})
+
+const updateDrawer = ref(false)
+const updateAppId = ref<number | null>(null)
+const updateApp = computed(() => list.value.find((a) => a.id === updateAppId.value) || null)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -132,7 +135,8 @@ async function handleDelete(row: any): Promise<void> {
 }
 
 function goUpdate(row: any): void {
-  router.push({ name: 'system-update', query: { appId: String(row.id) } })
+  updateAppId.value = row.id
+  updateDrawer.value = true
 }
 
 function typeTag(t: string): { type: any; label: string } {
@@ -354,6 +358,17 @@ onMounted(load)
         <el-button type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 更新抽屉 -->
+    <el-drawer
+      v-model="updateDrawer"
+      :title="`${updateApp?.display_name || updateApp?.name || ''} · 应用更新`"
+      direction="rtl"
+      size="780px"
+      destroy-on-close
+    >
+      <SystemUpdateView v-if="updateAppId" :app-id="updateAppId" />
+    </el-drawer>
   </div>
 </template>
 

@@ -22,12 +22,6 @@ const router = createRouter({
           meta: { title: '仪表盘', icon: 'Odometer' }
         },
         {
-          path: 'system-update',
-          name: 'system-update',
-          component: () => import('@/views/system/SystemUpdateView.vue'),
-          meta: { title: '应用更新', icon: 'Refresh' }
-        },
-        {
           path: 'apps',
           name: 'apps',
           component: () => import('@/views/system/AppManageView.vue'),
