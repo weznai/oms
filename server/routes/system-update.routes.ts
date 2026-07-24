@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import {
   getUpdateState, loadGlobalConfig, saveGlobalConfig, maskConfig,
-  testGithubConnection, probeProxy, getShellInfo, getPackagesInfo,
+  testGithubConnection, probeProxy, checkSsl, getShellInfo, getPackagesInfo,
   clearLogs
 } from '../services/system-update.service.js'
 import { ok, fail } from '../utils/response.js'
@@ -45,6 +45,14 @@ router.get('/update/test-github', requireAuth, async (req: Request, res: Respons
 /** 探测本地代理端口 */
 router.get('/update/probe-proxy', requireAuth, async (_req: Request, res: Response) => {
   ok(res, await probeProxy())
+})
+
+/** 检查目标仓库 SSL 证书 */
+router.get('/update/check-ssl', requireAuth, async (req: Request, res: Response) => {
+  const appId = Number(req.query.appId)
+  const app = appId ? await findAppById(appId) : null
+  const target = app?.repo_url || 'https://github.com'
+  ok(res, await checkSsl(target, loadGlobalConfig()))
 })
 
 /** 任务日志 */

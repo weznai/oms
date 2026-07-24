@@ -418,6 +418,117 @@ export async function probeProxy(): Promise<{ port: number; available: boolean }
   )
 }
 
+// ============ SSL 证书检查 ============
+export interface SslCheckResult {
+  ok: boolean
+  target: string
+  sslVerify: boolean
+  cert: {
+    subject: string
+    issuer: string
+    validFrom: string
+    validTo: string
+    daysLeft: number | null
+    expired: boolean
+    trusted: boolean
+  } | null
+  message: string
+}
+
+async function fetchTls(host: string, port: number, strict: boolean): Promise<{ cert: any; authorized: boolean }> {
+  const https = await import('node:https')
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      { host, port, method: 'GET', path: '/', rejectUnauthorized: strict, timeout: 10000 },
+      (res) => {
+        const socket = res.socket as any
+        const cert = socket?.getPeerCertificate?.()
+        const authorized = !!socket?.authorized
+        res.destroy()
+        resolve({ cert, authorized })
+      }
+    )
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(new Error('连接超时')) })
+    req.end()
+  })
+}
+
+export async function checkSsl(repoUrl: string, gcfg: GlobalUpdateConfig): Promise<SslCheckResult> {
+  const base: SslCheckResult = { ok: false, target: repoUrl, sslVerify: gcfg.sslVerify, cert: null, message: '' }
+  let host = ''
+  let port = 443
+  try {
+    let target = (repoUrl || '').trim()
+    const sshM = target.match(/^git@([^:]+):(.+)/)
+    if (sshM) target = `https://${sshM[1]}/${sshM[2].replace(/\.git$/, '')}`
+    const u = new URL(target)
+    if (u.protocol !== 'https:') return { ...base, message: '目标非 HTTPS，无需 SSL 校验' }
+    host = u.hostname
+    port = u.port ? Number(u.port) : 443
+    base.target = u.origin
+  } catch {
+    return { ...base, message: '目标地址格式无效，默认检查 https://github.com' }
+  }
+
+  // 放宽校验获取证书详情（兼容自签证书）
+  let certRaw: any
+  try {
+    certRaw = (await fetchTls(host, port, false)).cert
+  } catch (e) {
+    return { ...base, message: `无法建立 TLS 连接: ${(e as Error).message}` }
+  }
+  if (!certRaw || !Object.keys(certRaw).length) {
+    return { ...base, message: '未获取到证书信息（站点可能为 HTTP 或连接被重置）' }
+  }
+
+  const now = Date.now()
+  const validTo = certRaw.valid_to ? new Date(certRaw.valid_to) : null
+  const validFrom = certRaw.valid_from ? new Date(certRaw.valid_from) : null
+  const expired = validTo ? validTo.getTime() < now : false
+  const notYet = validFrom ? validFrom.getTime() > now : false
+  const daysLeft = validTo ? Math.floor((validTo.getTime() - now) / 86400000) : null
+
+  // 在当前 sslVerify 配置下验证是否受系统信任
+  let trusted = false
+  let verifyMsg = ''
+  if (gcfg.sslVerify) {
+    try {
+      trusted = (await fetchTls(host, port, true)).authorized
+      verifyMsg = trusted ? '证书受信任，严格校验可通过' : '证书不受信任，严格校验将失败'
+    } catch (e) {
+      verifyMsg = `严格校验失败: ${(e as Error).message}`
+    }
+  } else {
+    trusted = true
+    verifyMsg = '已跳过校验，连接不受证书有效性约束'
+  }
+
+  const warn: string[] = []
+  if (expired) warn.push('证书已过期')
+  else if (notYet) warn.push('证书尚未生效')
+  else if (daysLeft !== null && daysLeft < 30) warn.push(`${daysLeft} 天后到期`)
+
+  const ok = gcfg.sslVerify ? trusted && !expired && !notYet : true
+  const message = [verifyMsg, ...warn].join('；')
+
+  return {
+    ok,
+    target: base.target,
+    sslVerify: gcfg.sslVerify,
+    cert: {
+      subject: certRaw.subject?.CN || certRaw.subject?.O || '',
+      issuer: certRaw.issuer?.CN || certRaw.issuer?.O || '',
+      validFrom: certRaw.valid_from || '',
+      validTo: certRaw.valid_to || '',
+      daysLeft,
+      expired,
+      trusted
+    },
+    message
+  }
+}
+
 // ============ 主任务流程 ============
 export function runUpdateTask(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateConfig): Promise<void> {
   if (state.running) return Promise.reject(new Error('已有任务在运行中'))

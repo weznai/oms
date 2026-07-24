@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Download, Files, Box, Tools, Refresh, SwitchButton,
-  RefreshRight, Delete, Connection, Search
+  RefreshRight, Delete, Connection, Search, Lock
 } from '@element-plus/icons-vue'
 import { appApi, type AppItem } from '@/api/app'
 import { updateApi } from '@/api/update'
@@ -30,6 +30,7 @@ const gconfig = reactive({ githubToken: '', proxy: '', sslVerify: true, packageK
 const showConfig = ref(false)
 const testing = ref(false)
 const probing = ref(false)
+const checking = ref(false)
 const envInfo = ref<{ shell?: any; packages?: any }>({})
 
 function emptyState(): UpdateState {
@@ -172,6 +173,32 @@ async function probeProxy(): Promise<void> {
       if (!gconfig.proxy) gconfig.proxy = `http://127.0.0.1:${available[0]}`
     } else { ElMessage.info('未检测到本地代理') }
   } finally { probing.value = false }
+}
+
+async function checkSsl(): Promise<void> {
+  if (!selectedApp.value) { ElMessage.warning('请先选择应用'); return }
+  checking.value = true
+  try {
+    await saveConfig()
+    const res = await updateApi.checkSsl(selectedApp.value.id)
+    const d: any = res.data
+    const lines: string[] = []
+    if (d.cert) {
+      lines.push(`主体(CN): ${d.cert.subject || '-'}`)
+      lines.push(`颁发者: ${d.cert.issuer || '-'}`)
+      lines.push(`有效期: ${d.cert.validFrom} ~ ${d.cert.validTo}`)
+      if (d.cert.daysLeft !== null) lines.push(`剩余天数: ${d.cert.daysLeft}${d.cert.expired ? '（已过期）' : ''}`)
+      lines.push(`受系统信任: ${d.cert.trusted ? '是' : '否'}`)
+      lines.push('———')
+    }
+    lines.push(`当前策略: ${d.sslVerify ? '严格校验' : '跳过校验'}`)
+    lines.push(`检查结果: ${d.message}`)
+    ElMessageBox.alert(lines.join('\n'), `SSL 证书检查 · ${d.target}`, {
+      type: d.ok ? 'success' : 'warning',
+      confirmButtonText: '知道了'
+    })
+  } catch { ElMessage.error('SSL 检查失败') }
+  finally { checking.value = false }
 }
 
 async function clearLogs(): Promise<void> {
@@ -339,6 +366,7 @@ onUnmounted(stopPolling)
             <el-form-item>
               <el-button :icon="Connection" :loading="testing" @click="testGithub">测试当前应用连接</el-button>
               <el-button :icon="Search" :loading="probing" @click="probeProxy">探测本地代理</el-button>
+              <el-button :icon="Lock" :loading="checking" @click="checkSsl">SSL 证书检查</el-button>
               <el-button type="primary" @click="handleSaveConfig">保存配置</el-button>
             </el-form-item>
           </el-form>

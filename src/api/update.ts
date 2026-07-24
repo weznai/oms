@@ -15,6 +15,7 @@ export const updateApi = {
   saveConfig: (data: Partial<GlobalUpdateConfig>) => http.post('/system/update/config', data),
   testGithub: (appId: number) => http.get('/system/update/test-github', { params: { appId } }),
   probeProxy: () => http.get('/system/update/probe-proxy'),
+  checkSsl: (appId: number) => http.get('/system/update/check-ssl', { params: { appId } }),
   logs: () => http.get('/system/update/logs'),
   clearLogs: () => http.post('/system/update/clear-logs'),
   env: (appName?: string) => http.get('/system/update/env', { params: { app: appName } })
