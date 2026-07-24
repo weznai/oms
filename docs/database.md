@@ -63,7 +63,7 @@
 | remark | VARCHAR(255) | 备注 |
 | created_at / updated_at | BIGINT | 时间戳 |
 
-**种子数据**：`oss-ops`（本平台，nodejs/内部）+ `python-demo`（Python 模板示例，默认禁用）
+**种子数据**：`oss-ops`（本平台，nodejs/内部）+ `python-demo`（Python 模板示例，默认停用）
 
 ### 2.2 sys_param（系统参数）
 

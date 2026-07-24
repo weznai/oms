@@ -24,6 +24,8 @@ export interface AppItem {
   remark: string | null
   created_at: number
   updated_at: number
+  runStatus: string   // PM2 实际运行状态: online/stopped/errored/not_managed/pm2_missing
+  runPid: number
 }
 
 export interface AppInput {

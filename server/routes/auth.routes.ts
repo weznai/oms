@@ -23,7 +23,7 @@ router.post('/login', async (req: Request, res: Response) => {
     return fail(res, '用户名或密码错误', 1, 401)
   }
   if (!admin.enabled) {
-    return fail(res, '账号已被禁用', 1, 403)
+    return fail(res, '账号已停用', 1, 403)
   }
   await updateAdminLogin(admin.id, Date.now())
   const token = signToken({ id: admin.id, username: admin.username, role: admin.role })

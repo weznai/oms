@@ -109,7 +109,7 @@ MySQL 源库 ──► 读取表列表 ──► 逐表处理：
 - **类型**：`nodejs` / `python`（决定命令模板与流程）
 - **范围**：`internal`（本平台自身）/ `external`（外部系统）
 - **仓库**：GitHub 地址、分支、部署目录
-- **命令**：安装命令、构建命令（可禁用）、PM2 应用名、Python 入口文件/解释器
+- **命令**：安装命令、构建命令（可停用）、PM2 应用名、Python 入口文件/解释器
 - **部署排除**：glob 规则
 
 更新任务**针对选中的应用**执行，一次只跑一个（全局状态单例带 `appId/appName/appType`）。
@@ -119,7 +119,7 @@ MySQL 源库 ──► 读取表列表 ──► 逐表处理：
 | 类型 | 安装 | 构建 | PM2 重启 |
 |---|---|---|---|
 | Node.js | `npm install` | `npm run build`（默认启用） | `pm2 restart <name> --update-env` |
-| Python | `pip install -r requirements.txt` | 无（默认禁用） | `pm2 restart <name>`（首次 `pm2 start app.py --name <name> --interpreter python`） |
+| Python | `pip install -r requirements.txt` | 无（默认停用） | `pm2 restart <name>`（首次 `pm2 start app.py --name <name> --interpreter python`） |
 
 模板可通过 `GET /api/apps/templates` 获取，前端新建应用时按类型自动套用。
 

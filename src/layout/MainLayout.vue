@@ -56,7 +56,7 @@ async function handleLogout(): Promise<void> {
     <el-aside :width="collapse ? '64px' : '220px'" class="aside">
       <div class="logo">
         <div class="logo-icon">
-          <el-icon :size="22"><HomeFilled /></el-icon>
+          <span class="logo-text-ms">MS</span>
         </div>
         <transition name="fade">
           <span v-show="!collapse" class="logo-text">运营管理平台</span>
@@ -70,7 +70,7 @@ async function handleLogout(): Promise<void> {
         class="menu"
       >
         <el-menu-item v-for="m in menus" :key="m.name" :index="m.path">
-          <el-icon><component :is="iconMap[m.icon]" /></el-icon>
+          <el-icon class="menu-icon"><component :is="iconMap[m.icon]" /></el-icon>
           <template #title>{{ m.title }}</template>
         </el-menu-item>
       </el-menu>
@@ -158,6 +158,15 @@ async function handleLogout(): Promise<void> {
     justify-content: center;
     flex-shrink: 0;
     color: #fff;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
+  }
+
+  .logo-text-ms {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #fff;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
   }
 
   .logo-text {
@@ -182,6 +191,9 @@ async function handleLogout(): Promise<void> {
     border-radius: 8px;
     font-size: 14px;
 
+    .menu-icon {
+      color: #3b82f6;
+    }
     &:hover {
       color: var(--brand-1);
       background: #f1f5f9;

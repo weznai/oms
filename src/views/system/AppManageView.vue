@@ -133,6 +133,18 @@ function typeTag(t: string): { type: any; label: string } {
     : { type: 'success', label: 'Node.js' }
 }
 
+function runStatusMeta(s: string): { type: any; effect: string; label: string } {
+  switch (s) {
+    case 'online': return { type: 'success', effect: 'light', label: '运行中' }
+    case 'stopped': return { type: 'info', effect: 'plain', label: '已停止' }
+    case 'errored': return { type: 'danger', effect: 'light', label: '异常' }
+    case 'launching': return { type: 'warning', effect: 'light', label: '启动中' }
+    case 'stopping': return { type: 'warning', effect: 'plain', label: '停止中' }
+    case 'pm2_missing': return { type: 'info', effect: 'plain', label: 'PM2 未装' }
+    default: return { type: 'info', effect: 'plain', label: '未托管' }
+  }
+}
+
 function fmtTime(t: number): string {
   return new Date(t).toLocaleString('zh-CN', { hour12: false })
 }
@@ -158,6 +170,7 @@ onMounted(load)
         <el-table-column label="应用" min-width="150">
           <template #default="{ row }">
             <div class="app-name">
+              <span class="enabled-dot" :class="{ off: row.enabled !== 1 }" :title="row.enabled === 1 ? '已启用' : '已停用'"></span>
               <span class="name">{{ row.display_name || row.name }}</span>
               <span class="code">{{ row.name }}</span>
             </div>
@@ -177,15 +190,20 @@ onMounted(load)
         <el-table-column label="端口" width="68">
           <template #default="{ row }">{{ row.port || '-' }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="60">
+        <el-table-column label="运行状态" width="96">
           <template #default="{ row }">
-            <el-switch :model-value="row.enabled === 1" @change="handleToggle(row)" />
+            <el-tag :type="runStatusMeta(row.runStatus).type" :effect="runStatusMeta(row.runStatus).effect" size="small">
+              {{ runStatusMeta(row.runStatus).label }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" class-name="op-cell">
+        <el-table-column label="操作" width="216" class-name="op-cell">
           <template #default="{ row }">
             <el-button text type="primary" @click="goUpdate(row)">更新</el-button>
             <el-button text type="info" @click="openEdit(row)">编辑</el-button>
+            <el-button text :type="row.enabled === 1 ? 'warning' : 'success'" @click="handleToggle(row)">
+              {{ row.enabled === 1 ? '停用' : '启用' }}
+            </el-button>
             <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -328,6 +346,22 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   line-height: 1.4;
+  position: relative;
+  padding-left: 10px;
+  .enabled-dot {
+    position: absolute;
+    left: 0;
+    top: 5px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    &.off {
+      background: #cbd5e1;
+      box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.2);
+    }
+  }
   .name { font-weight: 600; color: #1e293b; font-size: 13px; }
   .code { font-size: 12px; color: #94a3b8; font-family: 'Cascadia Code', Consolas, monospace; }
 }

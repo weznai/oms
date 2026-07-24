@@ -8,13 +8,21 @@ import {
 } from '../db/app.repository.js'
 import { COMMAND_TEMPLATES } from '../services/command-template.js'
 import { runUpdateTask, VALID_MODES, loadGlobalConfig, type UpdateMode } from '../services/system-update.service.js'
+import { getPm2StatusMap } from '../services/pm2.service.js'
 import type { Request, Response } from 'express'
 
 const router = Router()
 
-/** 应用列表 */
+/** 应用列表（附带 PM2 实际运行状态） */
 router.get('/', requireAuth, async (_req: Request, res: Response) => {
-  ok(res, await listApps())
+  const apps = await listApps()
+  const pm2Map = getPm2StatusMap()
+  const enriched = apps.map((a) => ({
+    ...a,
+    runStatus: a.pm2_app_name ? (pm2Map[a.pm2_app_name]?.status ?? 'not_managed') : 'not_managed',
+    runPid: a.pm2_app_name ? (pm2Map[a.pm2_app_name]?.pid ?? 0) : 0
+  }))
+  ok(res, enriched)
 })
 
 /** 命令模板（按类型） */
@@ -57,13 +65,13 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 })
 
-/** 启用/禁用 */
+/** 启用/停用 */
 router.patch('/:id/enabled', requireAuth, async (req: Request, res: Response) => {
   const id = Number(req.params.id)
   const enabled = !!req.body?.enabled
   await setAppEnabled(id, enabled)
-  await addOperationLog({ username: req.admin!.username, ip: req.ip || '', action: 'app_toggle', description: `${enabled ? '启用' : '禁用'}应用 #${id}` })
-  ok(res, null, enabled ? '已启用' : '已禁用')
+  await addOperationLog({ username: req.admin!.username, ip: req.ip || '', action: 'app_toggle', description: `${enabled ? '启用' : '停用'}应用 #${id}` })
+  ok(res, null, enabled ? '已启用' : '已停用')
 })
 
 /** 删除应用 */
@@ -84,7 +92,7 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
   }
   const app = await findAppById(Number(req.params.id))
   if (!app) return fail(res, '应用不存在', 1, 404)
-  if (!app.enabled) return fail(res, '应用已禁用，请先启用')
+  if (!app.enabled) return fail(res, '应用已停用，请先启用')
   const gcfg = loadGlobalConfig()
   try {
     runUpdateTask(app, mode, gcfg).catch(() => { /* 错误已写入 state */ })

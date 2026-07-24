@@ -225,7 +225,7 @@ onUnmounted(stopPolling)
             <el-tag size="small" type="info" effect="plain">{{ selectedApp.scope === 'internal' ? '内部' : '外部' }}</el-tag>
             <el-tag v-if="selectedApp.port" size="small" type="primary" effect="plain">端口 {{ selectedApp.port }}</el-tag>
             <el-tag size="small" :type="selectedApp.enabled === 1 ? 'success' : 'info'" effect="plain">
-              {{ selectedApp.enabled === 1 ? '已启用' : '已禁用' }}
+              {{ selectedApp.enabled === 1 ? '已启用' : '已停用' }}
             </el-tag>
           </div>
           <div class="info-meta">
