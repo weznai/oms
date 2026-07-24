@@ -25,9 +25,17 @@ export function isPm2Available(): boolean {
   return pm2AvailableCache
 }
 
-/** 读取 pm2 jlist，返回全部进程信息 */
+/** 读取 pm2 jlist，返回全部进程信息（带 8 秒缓存，避免每次请求都 fork 进程） */
+let procCache: { t: number; data: Pm2ProcessInfo[] } | null = null
+const PROC_CACHE_TTL = 8_000
+
 export function getPm2Processes(): Pm2ProcessInfo[] {
-  if (!isPm2Available()) return []
+  const now = Date.now()
+  if (procCache && now - procCache.t < PROC_CACHE_TTL) return procCache.data
+  if (!isPm2Available()) {
+    procCache = { t: now, data: [] }
+    return []
+  }
   try {
     const out = execSync('pm2 jlist', {
       windowsHide: true,
@@ -35,7 +43,7 @@ export function getPm2Processes(): Pm2ProcessInfo[] {
       timeout: 5000
     })
     const list = JSON.parse(out) as any[]
-    return list.map((p) => ({
+    const data = list.map((p) => ({
       name: p.name,
       status: p.pm2_env?.status ?? 'unknown',
       pid: p.pid ?? 0,
@@ -44,8 +52,11 @@ export function getPm2Processes(): Pm2ProcessInfo[] {
       uptime: p.pm2_env?.pm_uptime ?? 0,
       restarts: p.pm2_env?.restart_time ?? 0
     }))
+    procCache = { t: now, data }
+    return data
   } catch (e) {
     logger.warn('读取 PM2 进程列表失败', e)
+    procCache = { t: now, data: [] }
     return []
   }
 }

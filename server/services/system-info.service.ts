@@ -32,13 +32,13 @@ export interface SystemInfo {
   platformVersion: string
 }
 
-export async function getSystemInfo(): Promise<SystemInfo> {
-  const totalMem = os.totalmem()
-  const freeMem = os.freemem()
-  const usedMem = totalMem - freeMem
-  const cpus = os.cpus()
-  const mem = process.memoryUsage()
+// 缓存：git 信息 / 命令可用性 不频繁变化，缓存 60 秒避免每次请求都 fork 子进程
+let cache: { t: number; gitBranch: string; gitCommit: string; pm2Available: boolean; gitAvailable: boolean } | null = null
+const CACHE_TTL = 60_000
 
+function getCachedEnv() {
+  const now = Date.now()
+  if (cache && now - cache.t < CACHE_TTL) return cache
   let gitBranch = ''
   let gitCommit = ''
   try {
@@ -47,9 +47,23 @@ export async function getSystemInfo(): Promise<SystemInfo> {
   try {
     gitCommit = execSync('git rev-parse --short HEAD', { cwd: config.update.projectRoot, windowsHide: true }).toString().trim()
   } catch { /* */ }
+  cache = {
+    t: now,
+    gitBranch,
+    gitCommit,
+    pm2Available: isAvailable('pm2'),
+    gitAvailable: isAvailable('git')
+  }
+  return cache
+}
 
-  const pm2Available = isAvailable('pm2')
-  const gitAvailable = isAvailable('git')
+export async function getSystemInfo(): Promise<SystemInfo> {
+  const totalMem = os.totalmem()
+  const freeMem = os.freemem()
+  const usedMem = totalMem - freeMem
+  const cpus = os.cpus()
+  const mem = process.memoryUsage()
+  const env = getCachedEnv()
 
   return {
     hostname: os.hostname(),
@@ -70,10 +84,10 @@ export async function getSystemInfo(): Promise<SystemInfo> {
     processMemMb: Number((mem.rss / 1024 / 1024).toFixed(2)),
     cwd: process.cwd(),
     dbType: currentDbType(),
-    pm2Available,
-    gitAvailable,
-    gitBranch,
-    gitCommit,
+    pm2Available: env.pm2Available,
+    gitAvailable: env.gitAvailable,
+    gitBranch: env.gitBranch,
+    gitCommit: env.gitCommit,
     platformName: (await getParam('platform_name')) ?? '运营管理平台',
     platformVersion: (await getParam('platform_version')) ?? '1.0.0'
   }
