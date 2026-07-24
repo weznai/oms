@@ -75,8 +75,8 @@ async function viewTable(name: string): Promise<void> {
   tableDetail.value = res.data
 }
 
-function statusTag(type: string): string {
-  const map: Record<string, string> = { success: 'success', partial: 'warning', failed: 'danger' }
+function statusTag(type: string): 'success' | 'warning' | 'danger' | 'info' {
+  const map: Record<string, 'success' | 'warning' | 'danger' | 'info'> = { success: 'success', partial: 'warning', failed: 'danger' }
   return map[type] || 'info'
 }
 

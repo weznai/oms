@@ -81,7 +81,7 @@ function openCreate(): void {
   dialogVisible.value = true
 }
 
-function openEdit(row: AppItem): void {
+function openEdit(row: any): void {
   isEdit.value = true
   Object.assign(form, {
     id: row.id, name: row.name, display_name: row.display_name, type: row.type,
@@ -117,12 +117,12 @@ async function handleSubmit(): Promise<void> {
   await load()
 }
 
-async function handleToggle(row: AppItem): Promise<void> {
+async function handleToggle(row: any): Promise<void> {
   await appApi.toggle(row.id, row.enabled !== 1)
   await load()
 }
 
-async function handleDelete(row: AppItem): Promise<void> {
+async function handleDelete(row: any): Promise<void> {
   try {
     await ElMessageBox.confirm(`确定删除应用「${row.display_name || row.name}」吗？`, '提示', { type: 'warning' })
   } catch { return }
@@ -131,7 +131,7 @@ async function handleDelete(row: AppItem): Promise<void> {
   await load()
 }
 
-function goUpdate(row: AppItem): void {
+function goUpdate(row: any): void {
   router.push({ name: 'system-update', query: { appId: String(row.id) } })
 }
 
@@ -141,7 +141,7 @@ function typeTag(t: string): { type: any; label: string } {
   return { type: 'success', label: 'Node.js' }
 }
 
-function runStatusMeta(s: string): { type: any; effect: string; label: string } {
+function runStatusMeta(s: string): { type: 'success' | 'info' | 'warning' | 'danger' | 'primary'; effect: 'plain' | 'light'; label: string } {
   switch (s) {
     case 'online': return { type: 'success', effect: 'light', label: '运行中' }
     case 'stopped': return { type: 'info', effect: 'plain', label: '已停止' }

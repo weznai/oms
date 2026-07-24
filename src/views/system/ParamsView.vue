@@ -36,7 +36,7 @@ function openCreate(): void {
   dialogVisible.value = true
 }
 
-function openEdit(row: ParamItem): void {
+function openEdit(row: any): void {
   isEdit.value = true
   Object.assign(form, { id: row.id, key: row.key, value: row.value, remark: row.remark || '' })
   dialogVisible.value = true
@@ -53,7 +53,7 @@ async function handleSubmit(): Promise<void> {
   await load()
 }
 
-async function handleDelete(row: ParamItem): Promise<void> {
+async function handleDelete(row: any): Promise<void> {
   try {
     await ElMessageBox.confirm(`确定删除参数「${row.key}」吗？`, '提示', { type: 'warning' })
   } catch { return }

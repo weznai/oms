@@ -49,7 +49,7 @@ function handleReset(): void {
   handleSearch()
 }
 
-function actionTag(action: string): string {
+function actionTag(action: string): 'danger' | 'warning' | 'success' | 'info' | 'primary' {
   if (action.includes('delete')) return 'danger'
   if (action.includes('update') || action.includes('sync') || action.includes('switch')) return 'warning'
   if (action === 'login') return 'success'
