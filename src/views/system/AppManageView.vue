@@ -31,13 +31,15 @@ const form = reactive({
   build_enabled: false,
   start_file: '',
   interpreter: '',
+  process_mode: 'pm2' as 'pm2' | 'custom',
+  start_cmd: '',
+  stop_cmd: '',
   enabled: true,
   remark: ''
 })
 
 const rules: FormRules = {
-  name: [{ required: true, message: '请输入应用标识', trigger: 'blur' }],
-  pm2_app_name: [{ required: true, message: '请输入 PM2 应用名', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入应用标识', trigger: 'blur' }]
 }
 
 async function load(): Promise<void> {
@@ -60,6 +62,9 @@ function applyTemplate(): void {
   form.build_enabled = tpl.buildEnabled
   form.start_file = tpl.startFile
   form.interpreter = tpl.interpreter
+  form.process_mode = tpl.processMode
+  form.start_cmd = tpl.startCmd
+  form.stop_cmd = tpl.stopCmd
   if (!excludesText.value) excludesText.value = tpl.deployExcludes
 }
 
@@ -69,7 +74,8 @@ function openCreate(): void {
     id: 0, name: '', display_name: '', type: 'nodejs', scope: 'internal',
     repo_url: '', branch: 'main', deploy_path: '', pm2_app_name: '', port: null,
     install_cmd: 'npm install', build_cmd: 'npm run build', build_enabled: true,
-    start_file: '', interpreter: '', enabled: true, remark: ''
+    start_file: '', interpreter: '', process_mode: 'pm2', start_cmd: '', stop_cmd: '',
+    enabled: true, remark: ''
   })
   excludesText.value = templates.value.nodejs?.deployExcludes || ''
   dialogVisible.value = true
@@ -82,7 +88,8 @@ function openEdit(row: AppItem): void {
     scope: row.scope, repo_url: row.repo_url, branch: row.branch, deploy_path: row.deploy_path,
     pm2_app_name: row.pm2_app_name, port: row.port, install_cmd: row.install_cmd,
     build_cmd: row.build_cmd, build_enabled: row.build_enabled === 1, start_file: row.start_file,
-    interpreter: row.interpreter, enabled: row.enabled === 1, remark: row.remark || ''
+    interpreter: row.interpreter, process_mode: row.process_mode, start_cmd: row.start_cmd,
+    stop_cmd: row.stop_cmd, enabled: row.enabled === 1, remark: row.remark || ''
   })
   excludesText.value = row.deploy_excludes || ''
   dialogVisible.value = true
@@ -95,7 +102,8 @@ async function handleSubmit(): Promise<void> {
     repo_url: form.repo_url, branch: form.branch, deploy_path: form.deploy_path,
     pm2_app_name: form.pm2_app_name, port: form.port, install_cmd: form.install_cmd,
     build_cmd: form.build_cmd, build_enabled: form.build_enabled, start_file: form.start_file,
-    interpreter: form.interpreter, deploy_excludes: excludesText.value,
+    interpreter: form.interpreter, process_mode: form.process_mode, start_cmd: form.start_cmd,
+    stop_cmd: form.stop_cmd, deploy_excludes: excludesText.value,
     enabled: form.enabled, remark: form.remark
   }
   if (isEdit.value) {
@@ -128,9 +136,9 @@ function goUpdate(row: AppItem): void {
 }
 
 function typeTag(t: string): { type: any; label: string } {
-  return t === 'python'
-    ? { type: 'warning', label: 'Python' }
-    : { type: 'success', label: 'Node.js' }
+  if (t === 'python') return { type: 'warning', label: 'Python' }
+  if (t === 'java') return { type: 'danger', label: 'Java' }
+  return { type: 'success', label: 'Node.js' }
 }
 
 function runStatusMeta(s: string): { type: any; effect: string; label: string } {
@@ -232,6 +240,7 @@ onMounted(load)
               <el-select v-model="form.type" style="width:100%" @change="applyTemplate">
                 <el-option label="Node.js" value="nodejs" />
                 <el-option label="Python" value="python" />
+                <el-option label="Java" value="java" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -276,35 +285,55 @@ onMounted(load)
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">PM2 进程</el-divider>
+        <el-divider content-position="left">进程管理</el-divider>
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :span="8">
+            <el-form-item label="管理方式">
+              <el-radio-group v-model="form.process_mode">
+                <el-radio-button value="pm2">PM2</el-radio-button>
+                <el-radio-button value="custom">自定义命令</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8" v-if="form.process_mode === 'pm2'">
             <el-form-item label="PM2 应用名" prop="pm2_app_name">
               <el-input v-model="form.pm2_app_name" placeholder="pm2 进程名" />
             </el-form-item>
           </el-col>
-          <template v-if="form.type === 'python'">
-            <el-col :span="6">
+          <template v-if="form.process_mode === 'pm2' && form.type === 'python'">
+            <el-col :span="4">
               <el-form-item label="入口文件">
                 <el-input v-model="form.start_file" placeholder="app.py" />
               </el-form-item>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="4">
               <el-form-item label="解释器">
                 <el-input v-model="form.interpreter" placeholder="python" />
               </el-form-item>
             </el-col>
           </template>
         </el-row>
+        <template v-if="form.process_mode === 'custom'">
+          <el-alert
+            type="warning" :closable="false" show-icon style="margin-bottom:12px"
+            title="自定义模式：通过下方命令启停服务（无需 PM2）。启动命令建议后台运行，停止命令用于终止进程。"
+          />
+          <el-form-item label="启动命令">
+            <el-input v-model="form.start_cmd" :placeholder="form.type === 'java' ? 'java -jar target/app.jar' : form.type === 'python' ? 'python app.py' : 'node server.js'" />
+          </el-form-item>
+          <el-form-item label="停止命令">
+            <el-input v-model="form.stop_cmd" placeholder="可选，如 kill $(cat app.pid) 或脚本" />
+          </el-form-item>
+        </template>
 
         <el-divider content-position="left">命令配置</el-divider>
         <el-form-item label="安装命令">
-          <el-input v-model="form.install_cmd" :placeholder="form.type === 'python' ? 'pip install -r requirements.txt' : 'npm install'" />
+          <el-input v-model="form.install_cmd" :placeholder="form.type === 'python' ? 'pip install -r requirements.txt' : form.type === 'java' ? 'mvn clean install -DskipTests' : 'npm install'" />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="18">
             <el-form-item label="构建命令">
-              <el-input v-model="form.build_cmd" :disabled="!form.build_enabled" :placeholder="form.type === 'python' ? 'Python 通常无需构建' : 'npm run build'" />
+              <el-input v-model="form.build_cmd" :disabled="!form.build_enabled" :placeholder="form.type === 'python' ? 'Python 通常无需构建' : form.type === 'java' ? 'mvn clean package -DskipTests' : 'npm run build'" />
             </el-form-item>
           </el-col>
           <el-col :span="6">

@@ -356,6 +356,52 @@ function spawnPm2Command(action: 'restart' | 'stop', app: AppRow, cwd: string): 
   pushLog(`已触发 PM2 ${action} ${app.pm2_app_name}（延迟 1 秒，分离执行）`)
 }
 
+// ============ 应用启停（PM2 / 自定义命令） ============
+async function restartApp(app: AppRow, cwd: string): Promise<void> {
+  if (app.process_mode === 'custom') {
+    if (!app.start_cmd) {
+      pushLog('自定义模式未配置启动命令(start_cmd)，跳过重启', 'warn')
+      return
+    }
+    pushLog(`执行自定义启动命令: ${app.start_cmd}`)
+    try {
+      await runCommand(app.start_cmd, cwd, 60, '[start] ')
+      pushLog('自定义启动命令执行完成')
+    } catch (e) {
+      pushLog(`启动命令执行失败: ${(e as Error).message}`, 'warn')
+    }
+    return
+  }
+  // PM2 模式
+  if (!pm2AvailableSync()) {
+    pushLog('PM2 未安装。可安装: npm i -g pm2；或在应用配置里改用「自定义」启停命令。', 'warn')
+    return
+  }
+  spawnPm2Command('restart', app, cwd)
+}
+
+async function stopApp(app: AppRow, cwd: string): Promise<void> {
+  if (app.process_mode === 'custom') {
+    if (!app.stop_cmd) {
+      pushLog('自定义模式未配置停止命令(stop_cmd)，跳过停止', 'warn')
+      return
+    }
+    pushLog(`执行自定义停止命令: ${app.stop_cmd}`)
+    try {
+      await runCommand(app.stop_cmd, cwd, 60, '[stop] ')
+      pushLog('自定义停止命令执行完成')
+    } catch (e) {
+      pushLog(`停止命令执行失败: ${(e as Error).message}`, 'warn')
+    }
+    return
+  }
+  if (!pm2AvailableSync()) {
+    pushLog('PM2 未安装，跳过停止操作', 'warn')
+    return
+  }
+  spawnPm2Command('stop', app, cwd)
+}
+
 // ============ 代理探测 ============
 export async function probeProxy(): Promise<{ port: number; available: boolean }[]> {
   const ports = [7890, 7891, 10808, 10809, 1080, 8080]
@@ -453,20 +499,12 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
 
     if (needStop) {
       setStage('stopping', '停止服务...', 95)
-      if (!pm2AvailableSync()) {
-        pushLog('PM2 未安装，跳过停止操作', 'warn')
-      } else {
-        spawnPm2Command('stop', app, deployRoot)
-      }
+      await stopApp(app, deployRoot)
     }
 
     if (needRestart) {
       setStage('restarting', '重启服务...', 95)
-      if (!pm2AvailableSync()) {
-        pushLog('PM2 未安装，无法重启。请手动重启服务。', 'warn')
-      } else {
-        spawnPm2Command('restart', app, deployRoot)
-      }
+      await restartApp(app, deployRoot)
     }
 
     setStage('done', '任务完成', 100)

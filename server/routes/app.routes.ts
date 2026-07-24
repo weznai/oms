@@ -113,7 +113,7 @@ function normalizeInput(body: any): AppInput {
   return {
     name: String(body?.name ?? '').trim(),
     display_name: String(body?.displayName ?? body?.display_name ?? '').trim(),
-    type: body?.type === 'python' ? 'python' : 'nodejs',
+    type: (['nodejs', 'python', 'java'].includes(body?.type) ? body.type : 'nodejs') as AppInput['type'],
     scope: body?.scope === 'external' ? 'external' : 'internal',
     repo_url: String(body?.repoUrl ?? body?.repo_url ?? '').trim(),
     branch: String(body?.branch ?? 'main').trim() || 'main',
@@ -125,6 +125,9 @@ function normalizeInput(body: any): AppInput {
     build_enabled: !!body?.buildEnabled,
     start_file: String(body?.startFile ?? body?.start_file ?? '').trim(),
     interpreter: String(body?.interpreter ?? '').trim(),
+    process_mode: body?.processMode === 'custom' ? 'custom' : 'pm2',
+    start_cmd: String(body?.startCmd ?? body?.start_cmd ?? '').trim(),
+    stop_cmd: String(body?.stopCmd ?? body?.stop_cmd ?? '').trim(),
     deploy_excludes: String(body?.deployExcludes ?? body?.deploy_excludes ?? '').trim(),
     enabled: body?.enabled !== false,
     remark: String(body?.remark ?? '').trim()

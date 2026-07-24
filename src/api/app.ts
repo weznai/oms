@@ -1,7 +1,8 @@
 import http from '@/utils/http'
 
-export type AppType = 'nodejs' | 'python'
+export type AppType = 'nodejs' | 'python' | 'java'
 export type AppScope = 'internal' | 'external'
+export type ProcessMode = 'pm2' | 'custom'
 
 export interface AppItem {
   id: number
@@ -19,12 +20,15 @@ export interface AppItem {
   build_enabled: number
   start_file: string
   interpreter: string
+  process_mode: ProcessMode
+  start_cmd: string
+  stop_cmd: string
   deploy_excludes: string
   enabled: number
   remark: string | null
   created_at: number
   updated_at: number
-  runStatus: string   // PM2 实际运行状态: online/stopped/errored/not_managed/pm2_missing
+  runStatus: string
   runPid: number
 }
 
@@ -43,6 +47,9 @@ export interface AppInput {
   build_enabled: boolean
   start_file: string
   interpreter: string
+  process_mode: ProcessMode
+  start_cmd: string
+  stop_cmd: string
   deploy_excludes: string
   enabled: boolean
   remark: string

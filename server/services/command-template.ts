@@ -1,4 +1,4 @@
-import type { AppType, AppRow } from '../db/app.repository.js'
+import type { AppType, AppRow, ProcessMode } from '../db/app.repository.js'
 
 export interface CommandTemplate {
   installCmd: string
@@ -6,6 +6,9 @@ export interface CommandTemplate {
   buildEnabled: boolean
   startFile: string
   interpreter: string
+  processMode: ProcessMode
+  startCmd: string
+  stopCmd: string
   deployExcludes: string
   description: string
 }
@@ -18,6 +21,9 @@ export const COMMAND_TEMPLATES: Record<AppType, CommandTemplate> = {
     buildEnabled: true,
     startFile: '',
     interpreter: '',
+    processMode: 'pm2',
+    startCmd: '',
+    stopCmd: '',
     deployExcludes: 'node_modules/**,\n.git/**,\ndist/**,\nlogs/**,\n.env',
     description: 'Node.js：npm 安装依赖 + 构建 + PM2 重启'
   },
@@ -27,14 +33,28 @@ export const COMMAND_TEMPLATES: Record<AppType, CommandTemplate> = {
     buildEnabled: false,
     startFile: 'app.py',
     interpreter: 'python',
+    processMode: 'pm2',
+    startCmd: '',
+    stopCmd: '',
     deployExcludes: '__pycache__/**,\nvenv/**,\n.venv/**,\n.git/**,\nlogs/**,\n*.pyc',
     description: 'Python：pip 安装依赖 + PM2（--interpreter python）重启'
+  },
+  java: {
+    installCmd: 'mvn clean install -DskipTests',
+    buildCmd: 'mvn clean package -DskipTests',
+    buildEnabled: true,
+    startFile: '',
+    interpreter: 'java',
+    processMode: 'custom',
+    startCmd: 'java -jar target/app.jar',
+    stopCmd: '',
+    deployExcludes: 'target/**,\n.git/**,\nlogs/**,\n*.class',
+    description: 'Java：Maven 构建 + java -jar 启动（自定义进程管理）'
   }
 }
 
 /** 生成 PM2 重启/停止命令 */
 export function buildPm2Action(action: 'restart' | 'stop', app: AppRow): string {
-  // 重启已存在的 PM2 应用
   if (action === 'restart') {
     return `pm2 restart ${app.pm2_app_name} --update-env`
   }
