@@ -20,7 +20,7 @@ const form = reactive({
   name: '',
   display_name: '',
   type: 'nodejs' as AppType,
-  scope: 'internal' as 'internal' | 'external',
+  scope: 'external' as 'internal' | 'external',
   repo_url: '',
   branch: 'main',
   deploy_path: '',
@@ -71,7 +71,7 @@ function applyTemplate(): void {
 function openCreate(): void {
   isEdit.value = false
   Object.assign(form, {
-    id: 0, name: '', display_name: '', type: 'nodejs', scope: 'internal',
+    id: 0, name: '', display_name: '', type: 'nodejs', scope: 'external',
     repo_url: '', branch: 'main', deploy_path: '', pm2_app_name: '', port: null,
     install_cmd: 'npm install', build_cmd: 'npm run build', build_enabled: true,
     start_file: '', interpreter: '', process_mode: 'pm2', start_cmd: '', stop_cmd: '',
