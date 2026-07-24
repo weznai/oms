@@ -30,6 +30,7 @@ const testing = ref(false)
 const probing = ref(false)
 const checking = ref(false)
 const envInfo = ref<{ shell?: any; packages?: any }>({})
+const source = ref<'zip' | 'git'>('zip')
 
 function emptyState(): UpdateState {
   return {
@@ -54,8 +55,9 @@ const stageMeta: Record<string, { label: string; color: string }> = {
 const actions = computed(() => {
   if (!selectedApp.value) return []
   const isPy = selectedApp.value.type === 'python'
+  const isGit = source.value === 'git'
   return [
-    { mode: 'download', label: '下载', desc: '从仓库拉取源码', icon: Download, color: '#3b82f6' },
+    { mode: 'download', label: isGit ? 'git拉取' : '下载', desc: isGit ? 'git fetch+reset 到部署目录' : '下载分支压缩包', icon: Download, color: '#3b82f6' },
     { mode: 'deploy', label: '部署', desc: '部署文件到目录', icon: Files, color: '#3b82f6' },
     { mode: 'install', label: '安装依赖', desc: isPy ? 'pip install' : 'npm install', icon: Box, color: '#f59e0b' },
     { mode: 'build', label: '编译', desc: isPy ? 'Python 通常跳过' : '执行构建', icon: Tools, color: '#06b6d4', disabled: isPy && selectedApp.value.build_enabled !== 1 },
@@ -110,23 +112,25 @@ async function scrollLog(): Promise<void> {
 }
 
 const modeTextMap: Record<string, string> = {
-  full: '一键更新（下载→部署→安装→构建→重启）',
-  download: '下载源码', deploy: '部署文件', install: '安装依赖',
+  full: '一键更新（拉取→安装→构建→重启）',
+  download: '拉取源码', deploy: '部署文件', install: '安装依赖',
   build: '编译构建', restart: '重启服务', stop: '停止服务'
 }
 
 async function run(mode: string): Promise<void> {
   if (!selectedApp.value) { ElMessage.warning('请先选择目标应用'); return }
   const text = modeTextMap[mode]
+  const useSource = ['full', 'download'].includes(mode)
   const danger = mode === 'stop' || mode === 'full' || mode === 'restart'
+  const extra = useSource ? `（${source.value === 'git' ? 'git 拉取' : '下载包'}）` : ''
   try {
     await ElMessageBox.confirm(
-      `确定对应用「${selectedApp.value.display_name || selectedApp.value.name}」执行「${text}」吗？${danger ? '服务可能会短暂中断。' : ''}`,
+      `确定对应用「${selectedApp.value.display_name || selectedApp.value.name}」执行「${text}${extra}」吗？${danger ? '服务可能会短暂中断。' : ''}`,
       '操作确认',
       { type: danger ? 'error' : 'warning', confirmButtonText: '确定执行', cancelButtonText: '取消' }
     )
   } catch { return }
-  await appApi.run(selectedApp.value.id, mode)
+  await appApi.run(selectedApp.value.id, mode, source.value)
   ElMessage.success('任务已开始')
   startPolling()
 }
@@ -258,11 +262,20 @@ onUnmounted(stopPolling)
         </div>
       </div>
 
+      <div class="source-bar">
+        <span class="source-label">拉取方式</span>
+        <el-radio-group v-model="source" size="small">
+          <el-radio-button value="zip">下载包 (zip)</el-radio-button>
+          <el-radio-button value="git">git pull</el-radio-button>
+        </el-radio-group>
+        <span class="source-hint">{{ source === 'git' ? '直接在部署目录 git fetch+reset（需目录已是 git 仓库）' : '下载分支压缩包，解压后部署到目录' }}</span>
+      </div>
+
       <div class="hero-action">
         <el-button type="primary" class="full-btn" :loading="state.running" :disabled="!canAct" @click="runFull">
           <el-icon style="margin-right:5px"><RefreshRight /></el-icon>一键更新
         </el-button>
-        <div class="hero-hint">完整执行：下载 → 部署 → 安装 → 构建 → 重启</div>
+        <div class="hero-hint">完整执行：{{ source === 'git' ? 'git 拉取' : '下载 → 部署' }} → 安装 → 构建 → 重启</div>
       </div>
 
       <div class="action-grid">
@@ -425,6 +438,20 @@ onUnmounted(stopPolling)
   .status-progress { flex: 1; max-width: 340px; margin-left: auto; .progress-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 3px; text-align: right; } }
 }
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
+
+/* 一键更新 */
+.source-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  .source-label { font-size: 13px; font-weight: 600; color: #475569; flex-shrink: 0; }
+  .source-hint { font-size: 12px; color: #94a3b8; }
+}
 
 /* 一键更新 */
 .hero-action {

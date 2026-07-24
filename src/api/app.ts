@@ -63,5 +63,5 @@ export const appApi = {
   update: (id: number, data: AppInput) => http.put(`/apps/${id}`, data),
   toggle: (id: number, enabled: boolean) => http.patch(`/apps/${id}/enabled`, { enabled }),
   remove: (id: number) => http.delete(`/apps/${id}`),
-  run: (id: number, mode: string) => http.post(`/apps/${id}/run`, { mode })
+  run: (id: number, mode: string, source?: 'zip' | 'git') => http.post(`/apps/${id}/run`, { mode, source })
 }

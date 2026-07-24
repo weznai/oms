@@ -18,6 +18,10 @@ export type UpdateMode = 'full' | 'download' | 'deploy' | 'install' | 'build' | 
 
 export const VALID_MODES: UpdateMode[] = ['full', 'download', 'deploy', 'install', 'build', 'restart', 'stop']
 
+/** 源码拉取方式：zip=下载压缩包，git=git pull/fetch */
+export type UpdateSource = 'zip' | 'git'
+export const VALID_SOURCES: UpdateSource[] = ['zip', 'git']
+
 export interface UpdateLogLine {
   t: number
   level: 'info' | 'warn' | 'error'
@@ -529,13 +533,43 @@ export async function checkSsl(repoUrl: string, gcfg: GlobalUpdateConfig): Promi
   }
 }
 
-// ============ 主任务流程 ============
-export function runUpdateTask(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateConfig): Promise<void> {
-  if (state.running) return Promise.reject(new Error('已有任务在运行中'))
-  return executeUpdate(app, mode, gcfg)
+// ============ git 拉取（在部署目录直接操作） ============
+async function gitFetchSource(app: AppRow, cwd: string, gcfg: GlobalUpdateConfig): Promise<void> {
+  const branch = (app.branch || 'main').replace(/["`$\\]/g, '')
+  const repoUrl = app.repo_url
+  if (!repoUrl) throw new Error(`应用 ${app.name} 未配置仓库地址`)
+
+  const opts: string[] = []
+  if (gcfg.githubToken) opts.push(`-c http.extraHeader="Authorization: Bearer ${gcfg.githubToken}"`)
+  if (gcfg.proxy) opts.push(`-c http.proxy="${gcfg.proxy}"`, `-c https.proxy="${gcfg.proxy}"`)
+  const gitBase = `git ${opts.join(' ')}`.trim()
+
+  const isRepo = fs.existsSync(path.join(cwd, '.git'))
+  if (!isRepo) {
+    const empty = !fs.existsSync(cwd) || fs.readdirSync(cwd).length === 0
+    if (!empty) {
+      throw new Error(`目标目录 ${cwd} 非 git 仓库且非空，无法 git 拉取。请改用「下载包」方式，或先清空目录后执行。`)
+    }
+    fs.mkdirSync(cwd, { recursive: true })
+    pushLog(`目录为空，执行 git clone: ${repoUrl} (${branch})`)
+    await runCommand(`${gitBase} clone --branch "${branch}" --depth 1 "${repoUrl}" .`, cwd, 300, '[git] ')
+    return
+  }
+
+  pushLog(`git fetch origin ${branch}`)
+  await runCommand(`${gitBase} fetch origin "${branch}"`, cwd, 180, '[git] ')
+  pushLog(`git reset --hard origin/${branch}`)
+  await runCommand(`${gitBase} reset --hard "origin/${branch}"`, cwd, 60, '[git] ')
+  pushLog(`git 拉取完成，已对齐 origin/${branch}`)
 }
 
-async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateConfig): Promise<void> {
+// ============ 主任务流程 ============
+export function runUpdateTask(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateConfig, source: UpdateSource = 'zip'): Promise<void> {
+  if (state.running) return Promise.reject(new Error('已有任务在运行中'))
+  return executeUpdate(app, mode, gcfg, source)
+}
+
+async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateConfig, source: UpdateSource = 'zip'): Promise<void> {
   state.running = true
   state.appId = app.id
   state.appName = app.name
@@ -559,32 +593,40 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
 
     const deployRoot = app.deploy_path || config.projectRoot
     let packageDir = ''
+    let gitDeployed = false
 
     if (needDownload) {
       if (!app.repo_url) throw new Error(`应用 ${app.name} 未配置仓库地址`)
-      setStage('downloading', '准备下载...', 10)
-      const packagesRoot = path.join(config.projectRoot, 'deploy', 'packages')
-      fs.mkdirSync(packagesRoot, { recursive: true })
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-      packageDir = path.join(packagesRoot, `${app.name}_${stamp}_${app.branch}`)
-      fs.mkdirSync(packageDir, { recursive: true })
-      const zipPath = path.join(packageDir, 'source.zip')
-      const url = normalizeCodeloadUrl(app.repo_url, app.branch || 'main')
-      await downloadFile(url, zipPath, gcfg)
-      setStage('deploying', '解压源码包...', 30)
-      const extractDir = path.join(packageDir, 'extract')
-      extractZip(zipPath, extractDir)
-      const top = fs.readdirSync(extractDir).filter((n) => fs.statSync(path.join(extractDir, n)).isDirectory())
-      if (top.length === 1) {
-        const moved = path.join(packageDir, 'source')
-        fs.renameSync(path.join(extractDir, top[0]), moved)
-        fs.rmSync(extractDir, { recursive: true, force: true })
+      if (source === 'git') {
+        setStage('downloading', 'git 拉取中...', 10)
+        await gitFetchSource(app, deployRoot, gcfg)
+        gitDeployed = true
+        setStage('downloading', 'git 拉取完成', 35)
+      } else {
+        setStage('downloading', '准备下载...', 10)
+        const packagesRoot = path.join(config.projectRoot, 'deploy', 'packages')
+        fs.mkdirSync(packagesRoot, { recursive: true })
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        packageDir = path.join(packagesRoot, `${app.name}_${stamp}_${app.branch}`)
+        fs.mkdirSync(packageDir, { recursive: true })
+        const zipPath = path.join(packageDir, 'source.zip')
+        const url = normalizeCodeloadUrl(app.repo_url, app.branch || 'main')
+        await downloadFile(url, zipPath, gcfg)
+        setStage('deploying', '解压源码包...', 30)
+        const extractDir = path.join(packageDir, 'extract')
+        extractZip(zipPath, extractDir)
+        const top = fs.readdirSync(extractDir).filter((n) => fs.statSync(path.join(extractDir, n)).isDirectory())
+        if (top.length === 1) {
+          const moved = path.join(packageDir, 'source')
+          fs.renameSync(path.join(extractDir, top[0]), moved)
+          fs.rmSync(extractDir, { recursive: true, force: true })
+        }
+        prunePackages(packagesRoot, gcfg.packageKeep)
       }
-      prunePackages(packagesRoot, gcfg.packageKeep)
       pushLog('下载阶段完成')
     }
 
-    if (needDeploy) {
+    if (needDeploy && !gitDeployed) {
       setStage('deploying', `部署文件到 ${deployRoot}...`, 40)
       const srcRoot = packageDir ? path.join(packageDir, 'source') : findLatestPackageSource(app.name)
       if (!srcRoot || !fs.existsSync(srcRoot)) throw new Error('找不到可部署的源码包，请先下载')

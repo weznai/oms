@@ -7,7 +7,7 @@ import {
   type AppInput
 } from '../db/app.repository.js'
 import { COMMAND_TEMPLATES } from '../services/command-template.js'
-import { runUpdateTask, VALID_MODES, loadGlobalConfig, type UpdateMode } from '../services/system-update.service.js'
+import { runUpdateTask, VALID_MODES, VALID_SOURCES, loadGlobalConfig, type UpdateMode, type UpdateSource } from '../services/system-update.service.js'
 import { getPm2StatusMap } from '../services/pm2.service.js'
 import type { Request, Response } from 'express'
 
@@ -90,18 +90,22 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
   if (!VALID_MODES.includes(mode)) {
     return fail(res, `无效的模式，可选: ${VALID_MODES.join(', ')}`)
   }
+  const source: UpdateSource = req.body?.source === 'git' ? 'git' : 'zip'
+  if (!VALID_SOURCES.includes(source)) {
+    return fail(res, `无效的拉取方式，可选: ${VALID_SOURCES.join(', ')}`)
+  }
   const app = await findAppById(Number(req.params.id))
   if (!app) return fail(res, '应用不存在', 1, 404)
   if (!app.enabled) return fail(res, '应用已停用，请先启用')
   const gcfg = loadGlobalConfig()
   try {
-    runUpdateTask(app, mode, gcfg).catch(() => { /* 错误已写入 state */ })
+    runUpdateTask(app, mode, gcfg, source).catch(() => { /* 错误已写入 state */ })
     await addOperationLog({
       username: req.admin!.username,
       ip: req.ip || '',
       action: 'system_update',
-      description: `执行应用 ${app.name} (${app.type}) 任务: ${mode}`,
-      extra: JSON.stringify({ appId: app.id, mode, type: app.type })
+      description: `执行应用 ${app.name} (${app.type}) 任务: ${mode} [${source}]`,
+      extra: JSON.stringify({ appId: app.id, mode, source, type: app.type })
     })
     ok(res, { mode, appName: app.name }, '任务已开始')
   } catch (e) {
