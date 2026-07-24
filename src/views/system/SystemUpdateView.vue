@@ -30,7 +30,7 @@ const testing = ref(false)
 const probing = ref(false)
 const checking = ref(false)
 const envInfo = ref<{ shell?: any; packages?: any }>({})
-const source = ref<'zip' | 'git'>('zip')
+const source = ref<'zip' | 'git'>('git')
 
 function emptyState(): UpdateState {
   return {
