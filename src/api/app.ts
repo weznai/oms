@@ -25,6 +25,7 @@ export interface AppItem {
   stop_cmd: string
   deploy_excludes: string
   access_url: string
+  log_file: string
   enabled: number
   remark: string | null
   created_at: number
@@ -54,8 +55,34 @@ export interface AppInput {
   stop_cmd: string
   deploy_excludes: string
   access_url: string
+  log_file: string
   enabled: boolean
   remark: string
+}
+
+export interface LogSource {
+  key: string
+  label: string
+  path: string
+  exists: boolean
+  size: number
+}
+
+export interface AppLogResult {
+  available: boolean
+  message: string
+  sources: LogSource[]
+  source: string | null
+  lines: string[]
+  totalLines: number
+  truncated: boolean
+  fileSize: number
+}
+
+export interface AppLogQuery {
+  source?: string
+  lines?: number
+  keyword?: string
 }
 
 export const appApi = {
@@ -66,5 +93,6 @@ export const appApi = {
   update: (id: number, data: AppInput) => http.put(`/apps/${id}`, data),
   toggle: (id: number, enabled: boolean) => http.patch(`/apps/${id}/enabled`, { enabled }),
   remove: (id: number) => http.delete(`/apps/${id}`),
-  run: (id: number, mode: string, source?: 'zip' | 'git') => http.post(`/apps/${id}/run`, { mode, source })
+  run: (id: number, mode: string, source?: 'zip' | 'git') => http.post(`/apps/${id}/run`, { mode, source }),
+  logs: (id: number, params: AppLogQuery) => http.get<any, { data: AppLogResult }>(`/apps/${id}/logs`, { params })
 }

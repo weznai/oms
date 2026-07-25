@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, SetUp, WarningFilled, Link } from '@element-plus/icons-vue'
+import { Plus, SetUp, WarningFilled, Link, Document } from '@element-plus/icons-vue'
 import { appApi, type AppItem, type AppInput, type AppType } from '@/api/app'
 import { updateApi } from '@/api/update'
 import SystemUpdateView from './SystemUpdateView.vue'
+import AppLogViewer from './AppLogViewer.vue'
 
 const list = ref<AppItem[]>([])
 const loading = ref(false)
@@ -13,6 +14,10 @@ const templates = ref<Record<string, any>>({})
 const updateDrawer = ref(false)
 const updateAppId = ref<number | null>(null)
 const updateApp = computed(() => list.value.find((a) => a.id === updateAppId.value) || null)
+
+const logDrawer = ref(false)
+const logAppId = ref<number | null>(null)
+const logApp = computed(() => list.value.find((a) => a.id === logAppId.value) || null)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -39,6 +44,7 @@ const form = reactive({
   start_cmd: '',
   stop_cmd: '',
   access_url: '',
+  log_file: '',
   enabled: true,
   remark: ''
 })
@@ -80,7 +86,7 @@ function openCreate(): void {
     repo_url: '', branch: 'main', deploy_path: '', pm2_app_name: '', port: null,
     install_cmd: 'npm install', build_cmd: 'npm run build', build_enabled: true,
     start_file: '', interpreter: '', process_mode: 'pm2', start_cmd: '', stop_cmd: '',
-    access_url: '', enabled: true, remark: ''
+    access_url: '', log_file: '', enabled: true, remark: ''
   })
   excludesText.value = templates.value.nodejs?.deployExcludes || ''
   dialogVisible.value = true
@@ -94,7 +100,7 @@ function openEdit(row: any): void {
     pm2_app_name: row.pm2_app_name, port: row.port, install_cmd: row.install_cmd,
     build_cmd: row.build_cmd, build_enabled: row.build_enabled === 1, start_file: row.start_file,
     interpreter: row.interpreter, process_mode: row.process_mode, start_cmd: row.start_cmd,
-    stop_cmd: row.stop_cmd, access_url: row.access_url || '', enabled: row.enabled === 1, remark: row.remark || ''
+    stop_cmd: row.stop_cmd, access_url: row.access_url || '', log_file: row.log_file || '', enabled: row.enabled === 1, remark: row.remark || ''
   })
   excludesText.value = row.deploy_excludes || ''
   dialogVisible.value = true
@@ -109,7 +115,7 @@ async function handleSubmit(): Promise<void> {
     build_cmd: form.build_cmd, build_enabled: form.build_enabled, start_file: form.start_file,
     interpreter: form.interpreter, process_mode: form.process_mode, start_cmd: form.start_cmd,
     stop_cmd: form.stop_cmd, deploy_excludes: excludesText.value, access_url: form.access_url,
-    enabled: form.enabled, remark: form.remark
+    log_file: form.log_file, enabled: form.enabled, remark: form.remark
   }
   if (isEdit.value) {
     await appApi.update(form.id, data)
@@ -148,6 +154,11 @@ async function handleDelete(row: any): Promise<void> {
 function goUpdate(row: any): void {
   updateAppId.value = row.id
   updateDrawer.value = true
+}
+
+function goLogs(row: any): void {
+  logAppId.value = row.id
+  logDrawer.value = true
 }
 
 function autoFillAccessUrl(): void {
@@ -258,7 +269,7 @@ onMounted(load)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250" class-name="op-cell">
+        <el-table-column label="操作" width="300" class-name="op-cell">
           <template #default="{ row }">
             <el-button
               text
@@ -268,6 +279,8 @@ onMounted(load)
             >{{ row.runStatus === 'online' ? '停止' : '启动' }}</el-button>
             <span class="op-sep">|</span>
             <el-button text type="primary" @click="goUpdate(row)">更新</el-button>
+            <span class="op-sep">|</span>
+            <el-button text type="info" :icon="Document" @click="goLogs(row)">日志</el-button>
             <span class="op-sep">|</span>
             <el-button text type="info" @click="openEdit(row)">编辑</el-button>
             <span class="op-sep">|</span>
@@ -387,6 +400,17 @@ onMounted(load)
           </el-form-item>
         </template>
 
+        <el-form-item label="日志文件">
+          <el-input
+            v-model="form.log_file"
+            :placeholder="form.process_mode === 'pm2' ? '留空则自动从 PM2 读取；可填绝对路径覆盖，多个用逗号分隔' : '日志文件绝对路径，多个用逗号或换行分隔'"
+          />
+          <div class="field-hint">
+            <span v-if="form.process_mode === 'pm2'">PM2 模式留空会自动发现 out/error 日志；填写路径则按指定文件读取。</span>
+            <span v-else>自定义命令模式必须填写，否则「日志」功能无法使用。</span>
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">命令配置</el-divider>
         <el-form-item label="安装命令">
           <el-input v-model="form.install_cmd" :placeholder="form.type === 'python' ? 'pip install -r requirements.txt' : form.type === 'java' ? 'mvn clean install -DskipTests' : 'npm install'" />
@@ -426,6 +450,9 @@ onMounted(load)
     >
       <SystemUpdateView v-if="updateAppId" :app-id="updateAppId" />
     </el-drawer>
+
+    <!-- 日志抽屉 -->
+    <AppLogViewer v-if="logAppId" v-model="logDrawer" :app-id="logAppId" :app-name="logApp?.display_name || logApp?.name || ''" />
   </div>
 </template>
 
@@ -494,6 +521,12 @@ onMounted(load)
   font-size: 12.5px;
 }
 .muted { color: #c0c4cc; font-size: 12.5px; }
+.field-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+  margin-top: 4px;
+}
 :deep(.op-cell .cell) {
   display: flex;
   align-items: center;

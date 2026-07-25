@@ -9,6 +9,7 @@ import {
 import { COMMAND_TEMPLATES } from '../services/command-template.js'
 import { runUpdateTask, VALID_MODES, VALID_SOURCES, loadGlobalConfig, type UpdateMode, type UpdateSource } from '../services/system-update.service.js'
 import { getPm2StatusMap, isPm2Available } from '../services/pm2.service.js'
+import { readAppLogs } from '../services/app-log.service.js'
 import { probePort } from '../utils/probe.js'
 import type { Request, Response } from 'express'
 
@@ -47,6 +48,18 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   const app = await findAppById(Number(req.params.id))
   if (!app) return fail(res, '应用不存在', 1, 404)
   ok(res, app)
+})
+
+/** 应用运行日志查询（支持按源/行数/关键字） */
+router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
+  const app = await findAppById(Number(req.params.id))
+  if (!app) return fail(res, '应用不存在', 1, 404)
+  const result = readAppLogs(app, {
+    source: req.query.source as string | undefined,
+    lines: req.query.lines ? Number(req.query.lines) : undefined,
+    keyword: req.query.keyword as string | undefined
+  })
+  ok(res, result)
 })
 
 /** 新增应用 */
@@ -145,6 +158,7 @@ function normalizeInput(body: any): AppInput {
     stop_cmd: String(body?.stopCmd ?? body?.stop_cmd ?? '').trim(),
     deploy_excludes: String(body?.deployExcludes ?? body?.deploy_excludes ?? '').trim(),
     access_url: String(body?.accessUrl ?? body?.access_url ?? '').trim(),
+    log_file: String(body?.logFile ?? body?.log_file ?? '').trim(),
     enabled: body?.enabled !== false,
     remark: String(body?.remark ?? '').trim()
   }

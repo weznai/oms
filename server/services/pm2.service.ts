@@ -11,6 +11,18 @@ export interface Pm2ProcessInfo {
   restarts: number
 }
 
+interface RawProc {
+  name: string
+  status: string
+  pid: number
+  cpu: number
+  memory: number
+  uptime: number
+  restarts: number
+  outLogPath: string
+  errLogPath: string
+}
+
 let pm2AvailableCache: boolean | null = null
 
 export function isPm2Available(): boolean {
@@ -26,12 +38,13 @@ export function isPm2Available(): boolean {
 }
 
 /** 读取 pm2 jlist，返回全部进程信息（带 8 秒缓存，避免每次请求都 fork 进程） */
-let procCache: { t: number; data: Pm2ProcessInfo[] } | null = null
+let procCache: { t: number; data: RawProc[] } | null = null
 const PROC_CACHE_TTL = 8_000
 
-export function getPm2Processes(): Pm2ProcessInfo[] {
+/** 强制读取一次 PM2 进程（带缓存）。返回原始字段（含日志路径） */
+function loadPm2Raw(force = false): RawProc[] {
   const now = Date.now()
-  if (procCache && now - procCache.t < PROC_CACHE_TTL) return procCache.data
+  if (!force && procCache && now - procCache.t < PROC_CACHE_TTL) return procCache.data
   if (!isPm2Available()) {
     procCache = { t: now, data: [] }
     return []
@@ -47,14 +60,16 @@ export function getPm2Processes(): Pm2ProcessInfo[] {
     const end = out.lastIndexOf(']')
     if (start === -1 || end <= start) throw new Error('pm2 jlist 输出非 JSON 数组')
     const list = JSON.parse(out.slice(start, end + 1)) as any[]
-    const data = list.map((p) => ({
+    const data: RawProc[] = list.map((p) => ({
       name: p.name,
       status: p.pm2_env?.status ?? 'unknown',
       pid: p.pid ?? 0,
       cpu: p.monit?.cpu ?? 0,
       memory: p.monit?.memory ?? 0,
       uptime: p.pm2_env?.pm_uptime ?? 0,
-      restarts: p.pm2_env?.restart_time ?? 0
+      restarts: p.pm2_env?.restart_time ?? 0,
+      outLogPath: p.pm2_env?.pm_out_log_path ?? '',
+      errLogPath: p.pm2_env?.pm_err_log_path ?? ''
     }))
     procCache = { t: now, data }
     return data
@@ -65,10 +80,29 @@ export function getPm2Processes(): Pm2ProcessInfo[] {
   }
 }
 
+export function getPm2Processes(): Pm2ProcessInfo[] {
+  return loadPm2Raw().map((p) => ({
+    name: p.name,
+    status: p.status,
+    pid: p.pid,
+    cpu: p.cpu,
+    memory: p.memory,
+    uptime: p.uptime,
+    restarts: p.restarts
+  }))
+}
+
 /** name -> 进程信息 映射，便于按应用名查询 */
 export function getPm2StatusMap(): Record<string, Pm2ProcessInfo> {
   const map: Record<string, Pm2ProcessInfo> = {}
   for (const p of getPm2Processes()) map[p.name] = p
+  return map
+}
+
+/** name -> { out, err } 日志文件路径 映射（用于应用日志查询） */
+export function getPm2LogPathMap(): Record<string, { out: string; err: string }> {
+  const map: Record<string, { out: string; err: string }> = {}
+  for (const p of loadPm2Raw()) map[p.name] = { out: p.outLogPath, err: p.errLogPath }
   return map
 }
 
