@@ -8,19 +8,31 @@ import {
 } from '../db/app.repository.js'
 import { COMMAND_TEMPLATES } from '../services/command-template.js'
 import { runUpdateTask, VALID_MODES, VALID_SOURCES, loadGlobalConfig, type UpdateMode, type UpdateSource } from '../services/system-update.service.js'
-import { getPm2StatusMap } from '../services/pm2.service.js'
+import { getPm2StatusMap, isPm2Available } from '../services/pm2.service.js'
+import { probePort } from '../utils/probe.js'
 import type { Request, Response } from 'express'
 
 const router = Router()
 
-/** 应用列表（附带 PM2 实际运行状态） */
+/** 应用列表（附带运行状态：优先 PM2，PM2 未覆盖时回退端口探测） */
 router.get('/', requireAuth, async (_req: Request, res: Response) => {
   const apps = await listApps()
   const pm2Map = getPm2StatusMap()
-  const enriched = apps.map((a) => ({
-    ...a,
-    runStatus: a.pm2_app_name ? (pm2Map[a.pm2_app_name]?.status ?? 'not_managed') : 'not_managed',
-    runPid: a.pm2_app_name ? (pm2Map[a.pm2_app_name]?.pid ?? 0) : 0
+  const pm2Ok = isPm2Available()
+  const enriched = await Promise.all(apps.map(async (a) => {
+    const pm2Info = a.pm2_app_name ? pm2Map[a.pm2_app_name] : undefined
+    let runStatus: string
+    let runPid = 0
+    if (pm2Info) {
+      runStatus = pm2Info.status
+      runPid = pm2Info.pid
+    } else if (a.port) {
+      runStatus = (await probePort(a.port)) ? 'online' : 'stopped'
+    } else {
+      runStatus = pm2Ok ? 'not_managed' : 'pm2_missing'
+    }
+    const canControl = a.process_mode === 'custom' ? (!!a.start_cmd || !!a.stop_cmd) : pm2Ok
+    return { ...a, runStatus, runPid, canControl }
   }))
   ok(res, enriched)
 })
@@ -96,7 +108,6 @@ router.post('/:id/run', requireAuth, async (req: Request, res: Response) => {
   }
   const app = await findAppById(Number(req.params.id))
   if (!app) return fail(res, '应用不存在', 1, 404)
-  if (!app.enabled) return fail(res, '应用已停用，请先启用')
   const gcfg = loadGlobalConfig()
   try {
     runUpdateTask(app, mode, gcfg, source).catch(() => { /* 错误已写入 state */ })
@@ -133,6 +144,7 @@ function normalizeInput(body: any): AppInput {
     start_cmd: String(body?.startCmd ?? body?.start_cmd ?? '').trim(),
     stop_cmd: String(body?.stopCmd ?? body?.stop_cmd ?? '').trim(),
     deploy_excludes: String(body?.deployExcludes ?? body?.deploy_excludes ?? '').trim(),
+    access_url: String(body?.accessUrl ?? body?.access_url ?? '').trim(),
     enabled: body?.enabled !== false,
     remark: String(body?.remark ?? '').trim()
   }

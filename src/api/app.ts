@@ -24,12 +24,14 @@ export interface AppItem {
   start_cmd: string
   stop_cmd: string
   deploy_excludes: string
+  access_url: string
   enabled: number
   remark: string | null
   created_at: number
   updated_at: number
   runStatus: string
   runPid: number
+  canControl: boolean
 }
 
 export interface AppInput {
@@ -51,6 +53,7 @@ export interface AppInput {
   start_cmd: string
   stop_cmd: string
   deploy_excludes: string
+  access_url: string
   enabled: boolean
   remark: string
 }

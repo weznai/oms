@@ -8,6 +8,7 @@ import {
 import { ok, fail } from '../utils/response.js'
 import { addOperationLog } from '../db/repositories.js'
 import { findAppById } from '../db/app.repository.js'
+import { installPm2 } from '../services/pm2.service.js'
 import type { Request, Response } from 'express'
 
 const router = Router()
@@ -70,6 +71,14 @@ router.post('/update/clear-logs', requireAuth, async (req: Request, res: Respons
 router.get('/update/env', requireAuth, async (req: Request, res: Response) => {
   const appName = req.query.app as string | undefined
   ok(res, { shell: getShellInfo(), packages: getPackagesInfo(appName) })
+})
+
+/** 全局安装 PM2 */
+router.post('/update/install-pm2', requireAuth, async (req: Request, res: Response) => {
+  const result = installPm2()
+  await addOperationLog({ username: req.admin!.username, ip: req.ip || '', action: 'install_pm2', description: result.message })
+  if (result.ok) ok(res, result, result.message)
+  else fail(res, result.message)
 })
 
 export default router

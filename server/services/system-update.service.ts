@@ -14,9 +14,9 @@ export type Stage =
   | 'installing' | 'building' | 'restarting' | 'stopping'
   | 'done' | 'error'
 
-export type UpdateMode = 'full' | 'download' | 'deploy' | 'install' | 'build' | 'restart' | 'stop'
+export type UpdateMode = 'full' | 'download' | 'deploy' | 'install' | 'build' | 'start' | 'restart' | 'stop'
 
-export const VALID_MODES: UpdateMode[] = ['full', 'download', 'deploy', 'install', 'build', 'restart', 'stop']
+export const VALID_MODES: UpdateMode[] = ['full', 'download', 'deploy', 'install', 'build', 'start', 'restart', 'stop']
 
 /** 源码拉取方式：zip=下载压缩包，git=git pull/fetch */
 export type UpdateSource = 'zip' | 'git'
@@ -348,7 +348,7 @@ function pm2AvailableSync(): boolean {
   }
 }
 
-function spawnPm2Command(action: 'restart' | 'stop', app: AppRow, cwd: string): void {
+function spawnPm2Command(action: 'start' | 'restart' | 'stop', app: AppRow, cwd: string): void {
   const cmd = buildPm2Action(action, app)
   const isWin = process.platform === 'win32'
   const delayed = isWin ? `timeout /t 1 /nobreak >nul && ${cmd}` : `sleep 1 && ${cmd}`
@@ -382,6 +382,28 @@ async function restartApp(app: AppRow, cwd: string): Promise<void> {
     return
   }
   spawnPm2Command('restart', app, cwd)
+}
+
+async function startApp(app: AppRow, cwd: string): Promise<void> {
+  if (app.process_mode === 'custom') {
+    if (!app.start_cmd) {
+      pushLog('自定义模式未配置启动命令(start_cmd)', 'warn')
+      return
+    }
+    pushLog(`执行自定义启动命令: ${app.start_cmd}`)
+    try {
+      await runCommand(app.start_cmd, cwd, 60, '[start] ')
+      pushLog('自定义启动命令执行完成')
+    } catch (e) {
+      pushLog(`启动命令执行失败: ${(e as Error).message}`, 'warn')
+    }
+    return
+  }
+  if (!pm2AvailableSync()) {
+    pushLog('PM2 未安装。可安装: npm i -g pm2；或在应用配置里改用「自定义」启停命令。', 'warn')
+    return
+  }
+  spawnPm2Command('start', app, cwd)
 }
 
 async function stopApp(app: AppRow, cwd: string): Promise<void> {
@@ -589,6 +611,7 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
     const needInstall = ['full', 'install'].includes(mode) && !!app.install_cmd
     const needBuild = ['full', 'build'].includes(mode) && app.build_enabled === 1 && !!app.build_cmd
     const needRestart = ['full', 'restart'].includes(mode)
+    const needStart = mode === 'start'
     const needStop = mode === 'stop'
 
     const deployRoot = app.deploy_path || config.projectRoot
@@ -653,6 +676,11 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
     if (needStop) {
       setStage('stopping', '停止服务...', 95)
       await stopApp(app, deployRoot)
+    }
+
+    if (needStart) {
+      setStage('restarting', '启动服务...', 95)
+      await startApp(app, deployRoot)
     }
 
     if (needRestart) {

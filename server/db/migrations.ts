@@ -143,6 +143,7 @@ const TABLES: TableDef[] = [
       start_cmd TEXT NOT NULL DEFAULT '',
       stop_cmd TEXT NOT NULL DEFAULT '',
       deploy_excludes TEXT NOT NULL DEFAULT '',
+      access_url TEXT NOT NULL DEFAULT '',
       enabled INTEGER NOT NULL DEFAULT 1,
       remark TEXT,
       created_at INTEGER NOT NULL,
@@ -168,6 +169,7 @@ const TABLES: TableDef[] = [
       start_cmd VARCHAR(512) NOT NULL DEFAULT '',
       stop_cmd VARCHAR(512) NOT NULL DEFAULT '',
       deploy_excludes TEXT NOT NULL,
+      access_url VARCHAR(512) NOT NULL DEFAULT '',
       enabled TINYINT(1) NOT NULL DEFAULT 1,
       remark VARCHAR(255) DEFAULT NULL,
       created_at BIGINT NOT NULL,
@@ -228,7 +230,8 @@ export async function initDatabase(): Promise<void> {
   const appAlterCols: { sqlite: string; mysql: string }[] = [
     { sqlite: `ALTER TABLE sys_app ADD COLUMN process_mode TEXT NOT NULL DEFAULT 'pm2'`, mysql: `ALTER TABLE sys_app ADD COLUMN process_mode VARCHAR(16) NOT NULL DEFAULT 'pm2'` },
     { sqlite: `ALTER TABLE sys_app ADD COLUMN start_cmd TEXT NOT NULL DEFAULT ''`, mysql: `ALTER TABLE sys_app ADD COLUMN start_cmd VARCHAR(512) NOT NULL DEFAULT ''` },
-    { sqlite: `ALTER TABLE sys_app ADD COLUMN stop_cmd TEXT NOT NULL DEFAULT ''`, mysql: `ALTER TABLE sys_app ADD COLUMN stop_cmd VARCHAR(512) NOT NULL DEFAULT ''` }
+    { sqlite: `ALTER TABLE sys_app ADD COLUMN stop_cmd TEXT NOT NULL DEFAULT ''`, mysql: `ALTER TABLE sys_app ADD COLUMN stop_cmd VARCHAR(512) NOT NULL DEFAULT ''` },
+    { sqlite: `ALTER TABLE sys_app ADD COLUMN access_url TEXT NOT NULL DEFAULT ''`, mysql: `ALTER TABLE sys_app ADD COLUMN access_url VARCHAR(512) NOT NULL DEFAULT ''` }
   ]
   for (const c of appAlterCols) {
     try { await db.exec(dialect === 'mysql' ? c.mysql : c.sqlite) } catch { /* 字段已存在 */ }

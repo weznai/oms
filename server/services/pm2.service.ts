@@ -76,3 +76,28 @@ export function getAppRunStatus(appName: string): Pm2Status {
   const map = getPm2StatusMap()
   return (map[appName]?.status as Pm2Status) ?? 'not_managed'
 }
+
+/** 重置 PM2 可用性与进程缓存（安装/卸载后调用） */
+export function resetPm2Cache(): void {
+  pm2AvailableCache = null
+  procCache = null
+}
+
+/** 全局安装 PM2（npm i -g pm2），返回结果 */
+export function installPm2(): { ok: boolean; message: string } {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  try {
+    execSync(`${npm} install -g pm2`, {
+      windowsHide: true,
+      timeout: 180000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf-8'
+    })
+    resetPm2Cache()
+    return { ok: true, message: 'PM2 安装成功' }
+  } catch (e) {
+    const err = e as Error & { stderr?: string }
+    const detail = (err.stderr || err.message || '').toString().split('\n').slice(-3).join(' ').trim()
+    return { ok: false, message: `安装失败${detail ? '：' + detail : '（可能需要 sudo 权限，或检查 npm 全局目录）'}` }
+  }
+}

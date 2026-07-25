@@ -53,12 +53,11 @@ export const COMMAND_TEMPLATES: Record<AppType, CommandTemplate> = {
   }
 }
 
-/** 生成 PM2 重启/停止命令 */
-export function buildPm2Action(action: 'restart' | 'stop', app: AppRow): string {
-  if (action === 'restart') {
-    return `pm2 restart ${app.pm2_app_name} --update-env`
-  }
-  return `pm2 stop ${app.pm2_app_name}`
+/** 生成 PM2 启动/重启/停止命令 */
+export function buildPm2Action(action: 'start' | 'restart' | 'stop', app: AppRow): string {
+  if (action === 'stop') return `pm2 stop ${app.pm2_app_name}`
+  if (action === 'start') return buildPm2Start(app)
+  return `pm2 restart ${app.pm2_app_name} --update-env`
 }
 
 /** 首次启动 Python 应用：pm2 start app.py --name xxx --interpreter python */
