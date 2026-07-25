@@ -32,6 +32,18 @@ async function bootstrap(): Promise<void> {
     credentials: true
   }))
 
+  // 慢请求诊断：记录处理耗时超过 100ms 的 /api 请求（用于区分 服务端慢 vs 网络慢）
+  app.use((req, res, next) => {
+    const start = Date.now()
+    res.on('finish', () => {
+      const dur = Date.now() - start
+      if (dur > 100 && req.path.startsWith('/api')) {
+        logger.info(`[SLOW ${dur}ms] ${req.method} ${req.originalUrl}`)
+      }
+    })
+    next()
+  })
+
   // 健康检查
   app.get('/api/health', (_req, res) => {
     res.json({ code: 0, message: 'ok', data: { status: 'up', uptime: process.uptime() } })
