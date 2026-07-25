@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 
 $Port = if ($env:PORT) { [int]$env:PORT } else { 1100 }
-$AppName = 'oss-ops'
+$AppName = 'oms-ops'
 
 Write-Host "========== 运营管理平台 编译并重启 (端口 $Port) ==========" -ForegroundColor Cyan
 

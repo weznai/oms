@@ -5,7 +5,7 @@
 set -e
 
 PORT="${PORT:-1100}"
-APP_NAME="oss-ops"
+APP_NAME="oms-ops"
 
 echo "========== 运营管理平台 编译并重启 (端口 $PORT) =========="
 

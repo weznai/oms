@@ -2,8 +2,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Download, Files, Box, Tools, Refresh, SwitchButton,
-  RefreshRight, Delete, Connection, Search, Lock
+  Download, Files, Box, Tools, Refresh, SwitchButton, VideoPlay,
+  RefreshRight, Upload, Delete, Connection, Search, Lock
 } from '@element-plus/icons-vue'
 import { appApi, type AppItem } from '@/api/app'
 import { updateApi } from '@/api/update'
@@ -14,6 +14,10 @@ interface UpdateState {
   stage: string; running: boolean; mode: string | null; progress: number
   message: string; startedAt: number | null; finishedAt: number | null
   error: string | null; logs: UpdateLogLine[]
+}
+interface ActionItem {
+  mode: string; label: string; desc: string; icon: any
+  color: string; danger?: boolean; disabled?: boolean
 }
 
 const props = defineProps<{ appId: number | null }>()
@@ -52,7 +56,7 @@ const stageMeta: Record<string, { label: string; color: string }> = {
   error: { label: '失败', color: '#ef4444' }
 }
 
-const actions = computed(() => {
+const updateActions = computed<ActionItem[]>(() => {
   if (!selectedApp.value) return []
   const isPy = selectedApp.value.type === 'python'
   const isGit = source.value === 'git'
@@ -60,14 +64,25 @@ const actions = computed(() => {
     { mode: 'download', label: isGit ? 'git拉取' : '下载', desc: isGit ? 'git fetch+reset 到部署目录' : '下载分支压缩包', icon: Download, color: '#3b82f6' },
     { mode: 'deploy', label: '部署', desc: '部署文件到目录', icon: Files, color: '#3b82f6' },
     { mode: 'install', label: '装依赖', desc: isPy ? 'pip install' : 'npm install', icon: Box, color: '#f59e0b' },
-    { mode: 'build', label: '编译', desc: isPy ? 'Python 通常跳过' : '执行构建', icon: Tools, color: '#06b6d4', disabled: isPy && selectedApp.value.build_enabled !== 1 },
+    { mode: 'build', label: '编译', desc: isPy ? 'Python 通常跳过' : '执行构建', icon: Tools, color: '#06b6d4', disabled: isPy && selectedApp.value.build_enabled !== 1 }
+  ]
+})
+
+const runActions = computed<ActionItem[]>(() => {
+  if (!selectedApp.value) return []
+  const rs = selectedApp.value.runStatus
+  return [
+    { mode: 'start', label: '启动', desc: 'PM2 启动', icon: VideoPlay, color: '#22c55e', disabled: rs === 'online' || rs === 'launching' },
     { mode: 'restart', label: '重启', desc: 'PM2 重启', icon: Refresh, color: '#10b981' },
-    { mode: 'stop', label: '停止', desc: 'PM2 停止', icon: SwitchButton, color: '#ef4444', danger: true }
+    { mode: 'stop', label: '停止', desc: 'PM2 停止', icon: SwitchButton, color: '#ef4444', danger: true, disabled: rs === 'stopped' || rs === 'stopping' }
   ]
 })
 
 const stageInfo = computed(() => stageMeta[state.value.stage] ?? stageMeta.idle)
 const canAct = computed(() => !!selectedApp.value && selectedApp.value.enabled === 1 && !state.value.running)
+const otherAppRunning = computed(() =>
+  state.value.running && !!selectedApp.value && state.value.appId !== null && state.value.appId !== selectedApp.value.id
+)
 
 async function loadStatus(): Promise<void> {
   const res = await updateApi.status()
@@ -77,6 +92,7 @@ async function loadStatus(): Promise<void> {
     if (res.data.stage === 'done') ElMessage.success(`[${res.data.appName}] 任务执行完成`)
     else if (res.data.stage === 'error') ElMessage.error(res.data.error || '任务失败')
     stopPolling()
+    await loadApps()
   }
   await scrollLog()
 }
@@ -114,7 +130,7 @@ async function scrollLog(): Promise<void> {
 const modeTextMap: Record<string, string> = {
   full: '一键发布更新（拉取→装依赖→构建→重启）',
   download: '拉取源码', deploy: '部署文件', install: '安装依赖',
-  build: '编译构建', restart: '重启服务', stop: '停止服务'
+  build: '编译构建', start: '启动服务', restart: '重启服务', stop: '停止服务'
 }
 
 async function run(mode: string): Promise<void> {
@@ -123,13 +139,15 @@ async function run(mode: string): Promise<void> {
   const useSource = ['full', 'download'].includes(mode)
   const danger = mode === 'stop' || mode === 'full' || mode === 'restart'
   const extra = useSource ? `（${source.value === 'git' ? 'git 拉取' : '下载包'}）` : ''
-  try {
-    await ElMessageBox.confirm(
-      `确定对应用「${selectedApp.value.display_name || selectedApp.value.name}」执行「${text}${extra}」吗？${danger ? '服务可能会短暂中断。' : ''}`,
-      '操作确认',
-      { type: danger ? 'error' : 'warning', confirmButtonText: '确定执行', cancelButtonText: '取消' }
-    )
-  } catch { return }
+  if (mode !== 'start') {
+    try {
+      await ElMessageBox.confirm(
+        `确定对应用「${selectedApp.value.display_name || selectedApp.value.name}」执行「${text}${extra}」吗？${danger ? '服务可能会短暂中断。' : ''}`,
+        '操作确认',
+        { type: danger ? 'error' : 'warning', confirmButtonText: '确定执行', cancelButtonText: '取消' }
+      )
+    } catch { return }
+  }
   await appApi.run(selectedApp.value.id, mode, source.value)
   ElMessage.success('任务已开始')
   startPolling()
@@ -244,10 +262,6 @@ onUnmounted(stopPolling)
           </span>
         </div>
       </div>
-    </el-card>
-
-    <!-- 执行控制 -->
-    <el-card shadow="never" class="panel" v-if="selectedApp">
       <div class="status-banner" :style="{ '--stage-color': stageInfo.color }">
         <span class="status-dot" :style="{ background: stageInfo.color }">
           <span v-if="state.running" class="pulse"></span>
@@ -255,13 +269,42 @@ onUnmounted(stopPolling)
         <div class="status-main">
           <div class="status-stage">{{ stageInfo.label }}<span v-if="state.appName" class="run-app"> · {{ state.appName }}</span></div>
           <div class="status-msg">{{ state.message }}</div>
+          <div v-if="otherAppRunning" class="status-warn">⚠ 正在执行「{{ state.appName }}」的任务，本应用操作需等待完成</div>
         </div>
-        <div class="status-progress" v-if="state.running || state.progress > 0">
-          <el-progress :percentage="state.progress" :color="stageInfo.color" :stroke-width="6" :show-text="false" />
-          <span class="progress-text">{{ state.progress }}% · {{ fmtTime(state.startedAt) }} → {{ fmtTime(state.finishedAt) }}</span>
+        <div class="status-right">
+          <div class="status-progress" v-if="state.running || state.progress > 0">
+            <el-progress :percentage="state.progress" :color="stageInfo.color" :stroke-width="6" :show-text="false" />
+            <span class="progress-text">{{ state.progress }}% · {{ fmtTime(state.startedAt) }} → {{ fmtTime(state.finishedAt) }}</span>
+          </div>
+          <el-button class="status-refresh" :icon="Refresh" text @click="loadStatus">刷新</el-button>
         </div>
       </div>
+    </el-card>
 
+    <!-- 运行控制 -->
+    <el-card shadow="never" class="panel" v-if="selectedApp">
+      <template #header><span class="panel-title"><el-icon style="margin-right:4px;vertical-align:-2px;color:#22c55e"><SwitchButton /></el-icon>运行控制</span></template>
+      <div class="action-grid cols-3">
+        <div
+          v-for="a in runActions"
+          :key="a.mode"
+          class="action-card"
+          :class="{ danger: a.danger, disabled: !canAct }"
+          @click="(!a.disabled && canAct) ? run(a.mode) : null"
+        >
+          <div class="action-icon" :style="{ background: a.color }">
+            <el-icon :size="15"><component :is="a.icon" /></el-icon>
+          </div>
+          <div class="action-text">
+            <div class="action-label">{{ a.label }}</div>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 发布更新 -->
+    <el-card shadow="never" class="panel" v-if="selectedApp">
+      <template #header><span class="panel-title"><el-icon style="margin-right:4px;vertical-align:-2px;color:#2563eb"><Upload /></el-icon>发布更新</span></template>
       <div class="source-bar">
         <span class="source-label">拉取方式</span>
         <el-radio-group v-model="source" size="small">
@@ -278,9 +321,9 @@ onUnmounted(stopPolling)
         <div class="hero-hint">完整执行：{{ source === 'git' ? 'git 拉取' : '下载 → 部署' }} → 安装 → 构建 → 重启</div>
       </div>
 
-      <div class="action-grid">
+      <div class="action-grid cols-4">
         <div
-          v-for="a in actions"
+          v-for="a in updateActions"
           :key="a.mode"
           class="action-card"
           :class="{ danger: a.danger, disabled: a.disabled || !canAct }"
@@ -294,11 +337,6 @@ onUnmounted(stopPolling)
           </div>
         </div>
       </div>
-
-      <div class="control-foot">
-        <el-button :icon="Refresh" @click="loadStatus">刷新状态</el-button>
-        <el-button :icon="Delete" @click="clearLogs">清空日志</el-button>
-      </div>
     </el-card>
 
     <el-empty v-else description="未选择应用" />
@@ -308,7 +346,11 @@ onUnmounted(stopPolling)
       <template #header>
         <div class="panel-head">
           <span class="panel-title">更新日志</span>
-          <el-tag size="small" effect="plain">共 {{ state.logs.length }} 条</el-tag>
+          <div class="log-head-actions">
+            <span class="global-hint">汇总所有应用</span>
+            <el-tag size="small" effect="plain">共 {{ state.logs.length }} 条</el-tag>
+            <el-button size="small" :icon="Delete" @click="clearLogs">清空日志</el-button>
+          </div>
         </div>
       </template>
       <div ref="logRef" class="terminal">
@@ -335,13 +377,11 @@ onUnmounted(stopPolling)
             <el-form-item label="GitHub Token">
               <el-input v-model="gconfig.githubToken" placeholder="私有仓库需要" show-password />
             </el-form-item>
+            <el-form-item label="HTTP/HTTPS 代理">
+              <el-input v-model="gconfig.proxy" placeholder="http://127.0.0.1:7890，留空直连" />
+            </el-form-item>
             <el-row :gutter="20">
-              <el-col :span="10">
-                <el-form-item label="HTTP/HTTPS 代理">
-                  <el-input v-model="gconfig.proxy" placeholder="http://127.0.0.1:7890，留空直连" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
+              <el-col :span="12">
                 <el-form-item label="SSL 证书校验">
                   <div class="ssl-control">
                     <el-switch v-model="gconfig.sslVerify" />
@@ -349,7 +389,7 @@ onUnmounted(stopPolling)
                   </div>
                 </el-form-item>
               </el-col>
-              <el-col :span="6">
+              <el-col :span="12">
                 <el-form-item label="部署包保留">
                   <el-input-number v-model="gconfig.packageKeep" :min="1" :max="20" controls-position="right" style="width:100%" />
                 </el-form-item>
@@ -379,6 +419,11 @@ onUnmounted(stopPolling)
 </template>
 
 <style scoped lang="scss">
+.update-page :deep(.el-card) { border-radius: 6px; }
+.update-page :deep(.el-card__body) { padding: 8px 14px; }
+.update-page :deep(.el-card__header) { padding: 7px 14px; min-height: 32px; }
+.update-page .panel { margin-bottom: 10px; }
+.update-page .panel:last-child { margin-bottom: 0; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; }
 .panel-title { font-weight: 600; }
 
@@ -403,7 +448,7 @@ onUnmounted(stopPolling)
 .app-info-bar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   .info-tags { display: flex; gap: 6px; flex-wrap: wrap; }
   .info-meta { display: flex; gap: 22px; flex-wrap: wrap; }
   .meta-item { display: flex; align-items: baseline; gap: 6px; }
@@ -423,9 +468,9 @@ onUnmounted(stopPolling)
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  margin-bottom: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 8px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--stage-color) 10%, transparent), color-mix(in srgb, var(--stage-color) 4%, transparent));
   border: 1px solid color-mix(in srgb, var(--stage-color) 22%, transparent);
   .status-dot {
@@ -437,7 +482,10 @@ onUnmounted(stopPolling)
   .status-stage { font-size: 15px; font-weight: 600; color: #1e293b; }
   .run-app { color: #94a3b8; font-weight: 400; font-size: 12px; }
   .status-msg { font-size: 12px; color: #64748b; margin-top: 2px; }
-  .status-progress { flex: 1; max-width: 340px; margin-left: auto; .progress-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 3px; text-align: right; } }
+  .status-warn { font-size: 12px; color: #d97706; margin-top: 3px; }
+  .status-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .status-refresh { flex-shrink: 0; color: #94a3b8; }
+  .status-progress { flex: 1; max-width: 340px; .progress-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 3px; text-align: right; } }
 }
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
 
@@ -446,11 +494,11 @@ onUnmounted(stopPolling)
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
-  padding: 10px 14px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
   background: #f8fafc;
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: 6px;
   .source-label { font-size: 13px; font-weight: 600; color: #475569; flex-shrink: 0; }
   .source-hint { font-size: 12px; color: #94a3b8; }
 }
@@ -458,9 +506,9 @@ onUnmounted(stopPolling)
 /* 一键更新 */
 .hero-action {
   text-align: center;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   .full-btn {
-    height: 44px; padding: 0 40px; font-size: 15px; font-weight: 600; letter-spacing: 1px;
+    height: 32px; padding: 0 24px; font-size: 13px; font-weight: 600; letter-spacing: 1px;
     border: none; background: var(--brand-grad);
     box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
     &:hover { box-shadow: 0 8px 22px rgba(37, 99, 235, 0.4); transform: translateY(-1px); }
@@ -470,10 +518,12 @@ onUnmounted(stopPolling)
 }
 
 /* 操作卡 */
-.action-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.action-grid { display: grid; gap: 6px; }
+.action-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.action-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .action-card {
-  display: flex; align-items: center; gap: 8px; padding: 9px 11px;
-  border: 1px solid var(--border-light); border-radius: 9px; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border: 1px solid var(--border-light); border-radius: 6px; cursor: pointer; transition: all 0.2s;
   background: #fff;
   &:hover { border-color: var(--brand-1); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(37, 99, 235, 0.14); }
   &:hover .action-icon { transform: scale(1.08); }
@@ -486,7 +536,8 @@ onUnmounted(stopPolling)
   }
   .action-label { font-size: 13px; font-weight: 600; color: #1e293b; }
 }
-.control-foot { margin-top: 14px; display: flex; gap: 8px; }
+.log-head-actions { display: flex; align-items: center; gap: 8px; }
+.global-hint { font-size: 12px; color: #94a3b8; }
 .ssl-control { display: flex; align-items: center; gap: 8px; }
 .hint { font-size: 12px; color: #909399; white-space: nowrap; }
 </style>

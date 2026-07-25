@@ -1,4 +1,4 @@
-# 运营管理平台 (OSS Ops Platform)
+# 运营管理平台 (OMS Ops Platform)
 
 基于 **Node.js + Vue 3** 的运营管理平台，首个模块为**系统管理**，提供系统发布、更新、重启、停止等运维能力，以及数据库（SQLite / MySQL）切换与同步。
 

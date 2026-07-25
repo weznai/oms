@@ -128,20 +128,6 @@ async function handleSubmit(): Promise<void> {
   await load()
 }
 
-async function handleStartStop(row: any): Promise<void> {
-  const mode = row.runStatus === 'online' ? 'stop' : 'start'
-  try {
-    await ElMessageBox.confirm(
-      `确定对应用「${row.display_name || row.name}」执行${mode === 'start' ? '启动' : '停止'}吗？`,
-      '操作确认',
-      { type: mode === 'stop' ? 'warning' : 'info', confirmButtonText: '确定', cancelButtonText: '取消' }
-    )
-  } catch { return }
-  await appApi.run(row.id, mode)
-  ElMessage.success(mode === 'start' ? '启动指令已发送' : '停止指令已发送')
-  setTimeout(load, 3000)
-}
-
 async function handleDelete(row: any): Promise<void> {
   try {
     await ElMessageBox.confirm(`确定删除应用「${row.display_name || row.name}」吗？`, '提示', { type: 'warning' })
@@ -269,16 +255,9 @@ onMounted(load)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" class-name="op-cell">
+        <el-table-column label="操作" width="220" class-name="op-cell">
           <template #default="{ row }">
-            <el-button
-              text
-              :type="row.runStatus === 'online' ? 'danger' : 'success'"
-              :disabled="!row.canControl"
-              @click="handleStartStop(row)"
-            >{{ row.runStatus === 'online' ? '停止' : '启动' }}</el-button>
-            <span class="op-sep">|</span>
-            <el-button text type="primary" @click="goUpdate(row)">更新</el-button>
+            <el-button text type="primary" @click="goUpdate(row)">启停·更新</el-button>
             <span class="op-sep">|</span>
             <el-button text type="warning" :icon="Document" @click="goLogs(row)">日志</el-button>
             <span class="op-sep">|</span>
@@ -441,10 +420,12 @@ onMounted(load)
     <!-- 更新抽屉 -->
     <el-drawer
       v-model="updateDrawer"
-      :title="`${updateApp?.display_name || updateApp?.name || ''} · 应用发布更新`"
+      :title="`${updateApp?.display_name || updateApp?.name || ''}-启停.更新`"
       direction="rtl"
       size="780px"
       destroy-on-close
+      class="update-drawer"
+      :body-style="{ padding: '0 14px' }"
     >
       <SystemUpdateView v-if="updateAppId" :app-id="updateAppId" />
     </el-drawer>
@@ -455,6 +436,10 @@ onMounted(load)
 </template>
 
 <style scoped lang="scss">
+.update-drawer :deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 8px 16px;
+}
 .toolbar {
   display: flex;
   justify-content: space-between;

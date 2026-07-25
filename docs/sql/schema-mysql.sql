@@ -4,8 +4,8 @@
 -- 字符集: utf8mb4
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS oss_ops DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE oss_ops;
+CREATE DATABASE IF NOT EXISTS oms_ops DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE oms_ops;
 
 -- 管理员表
 DROP TABLE IF EXISTS sys_admin;
@@ -117,5 +117,5 @@ INSERT INTO sys_schema_migration (name, applied_at, description)
 VALUES ('initial_schema', UNIX_TIMESTAMP()*1000, '系统管理模块初始表结构');
 
 INSERT INTO sys_app (name, display_name, type, scope, pm2_app_name, install_cmd, build_cmd, build_enabled, deploy_excludes, remark, created_at, updated_at) VALUES
-  ('oss-ops', '运营管理平台', 'nodejs', 'internal', 'oss-ops', 'npm install', 'npm run build', 1, 'node_modules/**,.git/**,db/**,logs/**,.env', '本平台自身', UNIX_TIMESTAMP()*1000, UNIX_TIMESTAMP()*1000),
+  ('oms-ops', '运营管理平台', 'nodejs', 'internal', 'oms-ops', 'npm install', 'npm run build', 1, 'node_modules/**,.git/**,db/**,logs/**,.env', '本平台自身', UNIX_TIMESTAMP()*1000, UNIX_TIMESTAMP()*1000),
   ('python-demo', 'Python 服务示例', 'python', 'external', 'python-demo', 'pip install -r requirements.txt', '', 0, '__pycache__/**,venv/**,.git/**', 'Python 应用模板（示例）', UNIX_TIMESTAMP()*1000, UNIX_TIMESTAMP()*1000);

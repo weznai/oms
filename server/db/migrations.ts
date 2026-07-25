@@ -282,7 +282,7 @@ async function seedDefaultApps(): Promise<void> {
     `INSERT INTO sys_app (name, display_name, type, scope, repo_url, branch, deploy_path, pm2_app_name, install_cmd, build_cmd, build_enabled, deploy_excludes, remark, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      'oss-ops', '运营管理平台', 'nodejs', 'internal',
+      'oms-ops', '运营管理平台', 'nodejs', 'internal',
       config.update.githubUrl, config.update.githubBranch, config.projectRoot, config.update.pm2AppName,
       'npm install', 'npm run build', 1,
       'node_modules/**,.git/**,db/**,logs/**,.env,update-config.json',

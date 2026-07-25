@@ -1,12 +1,12 @@
 // PM2 进程管理配置 - 运营管理平台
 // 启动: pm2 start ecosystem.config.cjs
-// 重启: pm2 restart oss-ops
-// 停止: pm2 stop oss-ops
-// 日志: pm2 logs oss-ops
+// 重启: pm2 restart oms-ops
+// 停止: pm2 stop oms-ops
+// 日志: pm2 logs oms-ops
 module.exports = {
   apps: [
     {
-      name: 'oss-ops',
+      name: 'oms-ops',
       script: 'server/index.ts',
       interpreter: 'node',
       interpreter_args: '--import tsx',

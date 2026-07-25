@@ -63,7 +63,7 @@
 | remark | VARCHAR(255) | 备注 |
 | created_at / updated_at | BIGINT | 时间戳 |
 
-**种子数据**：`oss-ops`（本平台，nodejs/内部）+ `python-demo`（Python 模板示例，默认停用）
+**种子数据**：`oms-ops`（本平台，nodejs/内部）+ `python-demo`（Python 模板示例，默认停用）
 
 ### 2.2 sys_param（系统参数）
 
@@ -159,18 +159,18 @@
 DB_TYPE=sqlite
 
 # SQLite
-DB_SQLITE_PATH=./db/oss-ops.db
+DB_SQLITE_PATH=./db/oms-ops.db
 
 # MySQL
 DB_MYSQL_HOST=127.0.0.1
 DB_MYSQL_PORT=3306
 DB_MYSQL_USER=root
 DB_MYSQL_PASSWORD=
-DB_MYSQL_DATABASE=oss_ops
+DB_MYSQL_DATABASE=oms_ops
 DB_MYSQL_CONNECTION_LIMIT=10
 ```
 
-- **默认 SQLite**：零配置，数据库文件即 `db/oss-ops.db`
+- **默认 SQLite**：零配置，数据库文件即 `db/oms-ops.db`
 - **切 MySQL**：`DB_TYPE=mysql` 并填好连接信息即可
 - **MySQL 手动建库**：执行 `docs/sql/schema-mysql.sql`
 - **运行时切换**：前端「数据库管理」页或 `POST /api/db/switch`

@@ -144,7 +144,7 @@
 **响应 data**
 ```json
 {
-  "appId": 1, "appName": "oss-ops", "appType": "nodejs",
+  "appId": 1, "appName": "oms-ops", "appType": "nodejs",
   "stage": "idle",          // idle/starting/downloading/deploying/installing/building/restarting/stopping/done/error
   "running": false, "mode": null, "progress": 0, "message": "空闲",
   "startedAt": null, "finishedAt": null, "error": null,

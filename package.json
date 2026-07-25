@@ -1,7 +1,7 @@
 {
-  "name": "oss-ops-platform",
+  "name": "oms-ops-platform",
   "version": "1.0.0",
-  "description": "运营管理平台 - 系统管理模块 (OSS Ops Platform)",
+  "description": "运营管理平台 - 系统管理模块 (OMS Ops Platform)",
   "type": "module",
   "private": true,
   "scripts": {
@@ -16,10 +16,10 @@
     "db:sync": "tsx scripts/sync-mysql-to-sqlite.ts",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:restart": "pm2 restart oss-ops",
-    "pm2:stop": "pm2 stop oss-ops",
-    "pm2:logs": "pm2 logs oss-ops",
-    "restart": "npm run build && pm2 restart oss-ops"
+    "pm2:restart": "pm2 restart oms-ops",
+    "pm2:stop": "pm2 stop oms-ops",
+    "pm2:logs": "pm2 logs oms-ops",
+    "restart": "npm run build && pm2 restart oms-ops"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

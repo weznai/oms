@@ -111,5 +111,5 @@ VALUES ('initial_schema', 0, '系统管理模块初始表结构');
 
 -- 默认应用（平台自身 nodejs + python 示例模板）
 INSERT INTO sys_app (name, display_name, type, scope, pm2_app_name, install_cmd, build_cmd, build_enabled, deploy_excludes, remark, created_at, updated_at) VALUES
-  ('oss-ops', '运营管理平台', 'nodejs', 'internal', 'oss-ops', 'npm install', 'npm run build', 1, 'node_modules/**,.git/**,db/**,logs/**,.env', '本平台自身', 0, 0),
+  ('oms-ops', '运营管理平台', 'nodejs', 'internal', 'oms-ops', 'npm install', 'npm run build', 1, 'node_modules/**,.git/**,db/**,logs/**,.env', '本平台自身', 0, 0),
   ('python-demo', 'Python 服务示例', 'python', 'external', 'python-demo', 'pip install -r requirements.txt', '', 0, '__pycache__/**,venv/**,.git/**', 'Python 应用模板（示例）', 0, 0);
