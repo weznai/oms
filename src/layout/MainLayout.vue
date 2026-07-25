@@ -42,7 +42,17 @@ const activeMenu = computed(() => route.path)
 
 async function handleLogout(): Promise<void> {
   try {
-    await ElMessageBox.confirm('确定要退出登录吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm('退出后需重新登录才能继续操作，确定退出吗？', '退出登录', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger',
+      customClass: 'logout-confirm',
+      roundButton: true,
+      center: true,
+      showClose: false,
+      draggable: false,
+    })
     await authApi.logout().catch(() => {})
     auth.logout()
     router.push({ name: 'login' })
@@ -267,5 +277,46 @@ async function handleLogout(): Promise<void> {
   padding: 14px 16px;
   overflow-y: auto;
   background: var(--bg-page);
+}
+</style>
+
+<style lang="scss">
+.logout-confirm {
+  width: 380px;
+  padding-bottom: 8px;
+  border-radius: 16px !important;
+  overflow: hidden;
+
+  .el-message-box__header {
+    padding: 22px 24px 4px;
+  }
+  .el-message-box__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .el-message-box__content {
+    padding: 6px 24px 0;
+    color: #64748b;
+    font-size: 14px;
+    .el-message-box__status {
+      position: relative;
+      top: auto;
+      transform: none;
+      display: block;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 38px;
+    }
+  }
+  .el-message-box__btns {
+    padding: 20px 24px 18px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    .el-button {
+      min-width: 92px;
+    }
+  }
 }
 </style>
