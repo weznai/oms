@@ -606,8 +606,12 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
     setStage('starting', `开始任务: ${app.name} (${app.type}) ${mode}`, 5)
     pushLog(`========== 开始执行 [${app.name}] (${app.type}) ${mode} 任务 ==========`)
 
-    const needDownload = ['full', 'download'].includes(mode)
-    const needDeploy = ['full', 'deploy'].includes(mode)
+    const hasRepo = !!app.repo_url
+    if ((mode === 'download' || mode === 'deploy') && !hasRepo) {
+      throw new Error(`应用 ${app.name} 未配置仓库地址`)
+    }
+    const needDownload = mode === 'download' || (mode === 'full' && hasRepo)
+    const needDeploy = mode === 'deploy' || (mode === 'full' && hasRepo)
     const needInstall = ['full', 'install'].includes(mode) && !!app.install_cmd
     const needBuild = ['full', 'build'].includes(mode) && app.build_enabled === 1 && !!app.build_cmd
     const needRestart = ['full', 'restart'].includes(mode)
