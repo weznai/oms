@@ -231,6 +231,7 @@ async function downloadFile(url: string, dest: string, gcfg: GlobalUpdateConfig)
   const ax = await getAxios(gcfg)
   const candidates = [url, url.replace(/\/refs\/heads\/[^/]+$/, '/refs/heads/master')]
 
+  let lastStatus = 0
   let lastErr: Error | null = null
   for (let i = 0; i < candidates.length; i++) {
     const target = candidates[i]
@@ -261,9 +262,21 @@ async function downloadFile(url: string, dest: string, gcfg: GlobalUpdateConfig)
         return
       } catch (e) {
         lastErr = e as Error
-        pushLog(`下载失败(尝试 ${retry + 1}): ${(e as Error).message}`, 'warn')
+        lastStatus = Number((e as any).response?.status) || 0
+        pushLog(`下载失败(尝试 ${retry + 1}): ${lastStatus ? `[${lastStatus}] ` : ''}${(e as Error).message}`, 'warn')
+        // 4xx 客户端错误（408 超时 / 429 限流除外）不会因重试而改变，跳过剩余重试
+        if (lastStatus >= 400 && lastStatus < 500 && lastStatus !== 408 && lastStatus !== 429) break
       }
     }
+    // 认证类错误换分支也不会成功，无需尝试其他候选 URL
+    if (lastStatus === 401 || lastStatus === 403) break
+  }
+
+  if (lastStatus === 404) {
+    throw new Error('仓库或分支不存在 (404)。可能原因：① 仓库为私有且未配置 GitHub Token；② 仓库地址或分支名有误。私有仓库建议改用「git 拉取」方式（支持 SSH 免密）。')
+  }
+  if (lastStatus === 401 || lastStatus === 403) {
+    throw new Error(`认证失败 (${lastStatus})，请检查 GitHub Token 是否有效且有该仓库访问权限。`)
   }
   throw lastErr ?? new Error('下载失败')
 }
@@ -577,6 +590,10 @@ async function gitFetchSource(app: AppRow, cwd: string, gcfg: GlobalUpdateConfig
     await runCommand(`${gitBase} clone --branch "${branch}" --depth 1 "${repoUrl}" .`, cwd, 300, '[git] ')
     return
   }
+
+  // 同步 origin 到当前配置的仓库地址（避免本地 remote 与配置不一致，例如由 HTTPS 改为 SSH 后仍走旧地址导致超时/404）
+  pushLog(`git remote set-url origin ${repoUrl}`)
+  await runCommand(`${gitBase} remote set-url origin "${repoUrl}" || ${gitBase} remote add origin "${repoUrl}"`, cwd, 30, '[git] ')
 
   pushLog(`git fetch origin ${branch}`)
   await runCommand(`${gitBase} fetch origin "${branch}"`, cwd, 180, '[git] ')

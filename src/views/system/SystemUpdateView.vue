@@ -336,15 +336,17 @@ onUnmounted(stopPolling)
               <el-input v-model="gconfig.githubToken" placeholder="私有仓库需要" show-password />
             </el-form-item>
             <el-row :gutter="20">
-              <el-col :span="12">
+              <el-col :span="10">
                 <el-form-item label="HTTP/HTTPS 代理">
                   <el-input v-model="gconfig.proxy" placeholder="http://127.0.0.1:7890，留空直连" />
                 </el-form-item>
               </el-col>
-              <el-col :span="6">
+              <el-col :span="8">
                 <el-form-item label="SSL 证书校验">
-                  <el-switch v-model="gconfig.sslVerify" />
-                  <span class="hint">{{ gconfig.sslVerify ? '严格校验' : '跳过(内网/自签证书)' }}</span>
+                  <div class="ssl-control">
+                    <el-switch v-model="gconfig.sslVerify" />
+                    <span class="hint">{{ gconfig.sslVerify ? '严格校验' : '跳过(内网/自签证书)' }}</span>
+                  </div>
                 </el-form-item>
               </el-col>
               <el-col :span="6">
@@ -485,5 +487,6 @@ onUnmounted(stopPolling)
   .action-label { font-size: 13px; font-weight: 600; color: #1e293b; }
 }
 .control-foot { margin-top: 14px; display: flex; gap: 8px; }
-.hint { margin-left: 8px; font-size: 12px; color: #909399; }
+.ssl-control { display: flex; align-items: center; gap: 8px; }
+.hint { font-size: 12px; color: #909399; white-space: nowrap; }
 </style>
