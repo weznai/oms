@@ -49,8 +49,16 @@ async function bootstrap(): Promise<void> {
   // 静态资源 + SPA 兜底（生产环境）
   const distDir = path.join(__dirname, 'dist')
   if (fs.existsSync(distDir)) {
-    app.use(express.static(distDir))
+    // 带 hash 的构建产物（/assets/*）：文件名随内容变化，可永久缓存且 immutable
+    app.use('/assets', express.static(path.join(distDir, 'assets'), {
+      maxAge: '1y',
+      immutable: true
+    }))
+    // 其余静态文件（favicon 等）：短缓存
+    app.use(express.static(distDir, { maxAge: '1h' }))
+    // SPA 兜底：index.html 必须不缓存，以便发版后浏览器立即拉到新引用
     app.get('*', (_req, res) => {
+      res.set('Cache-Control', 'no-cache')
       res.sendFile(path.join(distDir, 'index.html'))
     })
   }
