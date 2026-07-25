@@ -38,14 +38,8 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     modulePreload: false,
-    chunkSizeWarningLimit: 1500,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vue: ['vue', 'vue-router', 'pinia'],
-          element: ['element-plus', '@element-plus/icons-vue']
-        }
-      }
-    }
+    chunkSizeWarningLimit: 1500
+    // manualChunks 会把 element-plus 钉成一个 chunk，破坏 tree-shaking（保留全量组件）
+    // 去掉后让 Vite 自动分包：element-plus 组件随路由懒加载，首屏只加载用到的部分
   }
 })
