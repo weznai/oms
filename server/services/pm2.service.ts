@@ -42,7 +42,11 @@ export function getPm2Processes(): Pm2ProcessInfo[] {
       encoding: 'utf-8',
       timeout: 5000
     })
-    const list = JSON.parse(out) as any[]
+    // pm2 jlist 输出前可能带有 banner/警告/ANSI 码，仅提取首个 [ 到末尾 ] 的 JSON 数组
+    const start = out.indexOf('[')
+    const end = out.lastIndexOf(']')
+    if (start === -1 || end <= start) throw new Error('pm2 jlist 输出非 JSON 数组')
+    const list = JSON.parse(out.slice(start, end + 1)) as any[]
     const data = list.map((p) => ({
       name: p.name,
       status: p.pm2_env?.status ?? 'unknown',
