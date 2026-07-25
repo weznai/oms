@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { spawn, spawnSync, execSync, type ChildProcess } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { createWriteStream } from 'node:fs'
@@ -7,7 +8,8 @@ import { config } from '../config/index.js'
 import { logger } from '../utils/logger.js'
 import { matchAny } from '../utils/glob.js'
 import type { AppRow } from '../db/app.repository.js'
-import { buildPm2Action, parseExcludes } from './command-template.js'
+import { buildPm2Action, buildPm2Start, parseExcludes } from './command-template.js'
+import { getPm2StatusMap } from './pm2.service.js'
 
 export type Stage =
   | 'idle' | 'starting' | 'downloading' | 'deploying'
@@ -322,6 +324,34 @@ function deployFiles(src: string, dest: string, excludes: string[]): { copied: n
   return { copied, skipped }
 }
 
+// ============ 依赖变更检测（跳过无变化的 npm/pip install） ============
+const INSTALL_HASH_FILE = '.install-hash'
+function depsFingerprint(deployRoot: string): string | null {
+  const h = createHash('md5')
+  let found = false
+  for (const f of ['package.json', 'package-lock.json', 'requirements.txt']) {
+    const p = path.join(deployRoot, f)
+    if (fs.existsSync(p)) { h.update(fs.readFileSync(p, 'utf-8')); found = true }
+  }
+  return found ? h.digest('hex') : null
+}
+/** 依赖指纹与上次安装一致时返回 true（可跳过安装） */
+function depsUnchanged(deployRoot: string): boolean {
+  const current = depsFingerprint(deployRoot)
+  if (!current) return false
+  const hashFile = path.join(deployRoot, 'node_modules', INSTALL_HASH_FILE)
+  if (!fs.existsSync(hashFile)) return false
+  return fs.readFileSync(hashFile, 'utf-8').trim() === current
+}
+function saveDepsFingerprint(deployRoot: string): void {
+  const fp = depsFingerprint(deployRoot)
+  if (!fp) return
+  const nmDir = path.join(deployRoot, 'node_modules')
+  if (fs.existsSync(nmDir)) {
+    try { fs.writeFileSync(path.join(nmDir, INSTALL_HASH_FILE), fp) } catch { /* ignore */ }
+  }
+}
+
 // ============ 执行命令 ============
 function runCommand(cmd: string, cwd: string, timeout: number, logPrefix = ''): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -361,16 +391,45 @@ function pm2AvailableSync(): boolean {
   }
 }
 
-function spawnPm2Command(action: 'start' | 'restart' | 'stop', app: AppRow, cwd: string): void {
-  const cmd = buildPm2Action(action, app)
+/** 延迟 1 秒分离执行一条命令（让当前任务先结束），输出写入 pm2-control.log */
+function spawnDelayed(cmd: string, cwd: string, label: string): void {
+  if (!fs.existsSync(cwd)) {
+    throw new Error(`工作目录不存在: ${cwd}，无法执行 ${label}。请先执行下载/部署，或检查应用配置的部署目录。`)
+  }
   const isWin = process.platform === 'win32'
   const delayed = isWin ? `timeout /t 1 /nobreak >nul && ${cmd}` : `sleep 1 && ${cmd}`
   const ctrlLog = path.join(config.projectRoot, 'logs', 'pm2-control.log')
   fs.mkdirSync(path.dirname(ctrlLog), { recursive: true })
   const fd = fs.openSync(ctrlLog, 'a')
   const [shell, args] = isWin ? ['cmd.exe', ['/c', delayed]] : ['/bin/bash', ['-c', delayed]]
-  spawn(shell, args, { cwd, detached: true, stdio: ['ignore', fd, fd], windowsHide: true }).unref()
-  pushLog(`已触发 PM2 ${action} ${app.pm2_app_name}（延迟 1 秒，分离执行）`)
+  pushLog(`${label} 执行: ${cmd} (目录: ${cwd})`)
+  const child = spawn(shell, args, { cwd, detached: true, stdio: ['ignore', fd, fd], windowsHide: true })
+  child.on('error', (err) => pushLog(`${label} 触发失败: ${err.message}`, 'error'))
+  child.unref()
+  pushLog(`已触发 ${label}（延迟 1 秒分离执行，控制日志: ${ctrlLog}）`)
+}
+
+function spawnPm2Command(action: 'start' | 'restart' | 'stop', app: AppRow, cwd: string): void {
+  spawnDelayed(buildPm2Action(action, app), cwd, `PM2 ${action} ${app.pm2_app_name}`)
+}
+
+/**
+ * 首次部署时 PM2 中还没有该进程，restart 会失败。
+ * 检测未注册时用 ecosystem.config.cjs（优先）或 buildPm2Start 首次启动。
+ * 返回 true 表示已处理（首次启动），调用方无需再 restart；false 表示已注册，走 restart。
+ */
+function ensurePm2Registered(app: AppRow, cwd: string): boolean {
+  const statusMap = getPm2StatusMap()
+  if (statusMap[app.pm2_app_name]) return false
+  const ecosystemPath = path.join(cwd, 'ecosystem.config.cjs')
+  if (fs.existsSync(ecosystemPath)) {
+    pushLog(`PM2 未注册 ${app.pm2_app_name}，用 ecosystem 首次启动`)
+    spawnDelayed('pm2 start ecosystem.config.cjs', cwd, `PM2 首次启动 ${app.pm2_app_name}`)
+    return true
+  }
+  pushLog(`PM2 未注册 ${app.pm2_app_name}，执行首次启动`, 'warn')
+  spawnDelayed(buildPm2Start(app), cwd, `PM2 首次启动 ${app.pm2_app_name}`)
+  return true
 }
 
 // ============ 应用启停（PM2 / 自定义命令） ============
@@ -380,7 +439,7 @@ async function restartApp(app: AppRow, cwd: string): Promise<void> {
       pushLog('自定义模式未配置启动命令(start_cmd)，跳过重启', 'warn')
       return
     }
-    pushLog(`执行自定义启动命令: ${app.start_cmd}`)
+    pushLog(`执行自定义启动命令: ${app.start_cmd} (目录: ${cwd})`)
     try {
       await runCommand(app.start_cmd, cwd, 60, '[start] ')
       pushLog('自定义启动命令执行完成')
@@ -394,6 +453,7 @@ async function restartApp(app: AppRow, cwd: string): Promise<void> {
     pushLog('PM2 未安装。可安装: npm i -g pm2；或在应用配置里改用「自定义」启停命令。', 'warn')
     return
   }
+  if (ensurePm2Registered(app, cwd)) return  // 首次部署已启动，无需 restart
   spawnPm2Command('restart', app, cwd)
 }
 
@@ -403,7 +463,7 @@ async function startApp(app: AppRow, cwd: string): Promise<void> {
       pushLog('自定义模式未配置启动命令(start_cmd)', 'warn')
       return
     }
-    pushLog(`执行自定义启动命令: ${app.start_cmd}`)
+    pushLog(`执行自定义启动命令: ${app.start_cmd} (目录: ${cwd})`)
     try {
       await runCommand(app.start_cmd, cwd, 60, '[start] ')
       pushLog('自定义启动命令执行完成')
@@ -416,6 +476,7 @@ async function startApp(app: AppRow, cwd: string): Promise<void> {
     pushLog('PM2 未安装。可安装: npm i -g pm2；或在应用配置里改用「自定义」启停命令。', 'warn')
     return
   }
+  if (ensurePm2Registered(app, cwd)) return  // 首次部署已启动
   spawnPm2Command('start', app, cwd)
 }
 
@@ -425,7 +486,7 @@ async function stopApp(app: AppRow, cwd: string): Promise<void> {
       pushLog('自定义模式未配置停止命令(stop_cmd)，跳过停止', 'warn')
       return
     }
-    pushLog(`执行自定义停止命令: ${app.stop_cmd}`)
+    pushLog(`执行自定义停止命令: ${app.stop_cmd} (目录: ${cwd})`)
     try {
       await runCommand(app.stop_cmd, cwd, 60, '[stop] ')
       pushLog('自定义停止命令执行完成')
@@ -622,6 +683,7 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
   try {
     setStage('starting', `开始任务: ${app.name} (${app.type}) ${mode}`, 5)
     pushLog(`========== 开始执行 [${app.name}] (${app.type}) ${mode} 任务 ==========`)
+    pushLog(`网络配置: Token=${gcfg.githubToken ? '已设置' : '无'} 代理=${gcfg.proxy || '直连'} SSL校验=${gcfg.sslVerify ? '严格' : '跳过'}`)
 
     const hasRepo = !!app.repo_url
     if ((mode === 'download' || mode === 'deploy') && !hasRepo) {
@@ -639,6 +701,11 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
     let packageDir = ''
     let gitDeployed = false
 
+    pushLog(`目标目录: ${deployRoot}`)
+    if (needDownload) pushLog(`源码: ${app.repo_url} (分支 ${app.branch || 'main'}, ${source === 'git' ? 'git 拉取' : '下载包 zip'})`)
+    const stages = [needDownload && '下载', needDeploy && '部署', needInstall && '安装', needBuild && '构建', needStop && '停止', needStart && '启动', needRestart && '重启'].filter(Boolean)
+    pushLog(`执行阶段: ${stages.join(' → ')}`)
+
     if (needDownload) {
       if (!app.repo_url) throw new Error(`应用 ${app.name} 未配置仓库地址`)
       if (source === 'git') {
@@ -653,17 +720,32 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
         const stamp = new Date().toISOString().replace(/[:.]/g, '-')
         packageDir = path.join(packagesRoot, `${app.name}_${stamp}_${app.branch}`)
         fs.mkdirSync(packageDir, { recursive: true })
+        pushLog(`下载包目录: ${packageDir}`)
         const zipPath = path.join(packageDir, 'source.zip')
         const url = normalizeCodeloadUrl(app.repo_url, app.branch || 'main')
+        pushLog(`下载地址: ${url}`)
         await downloadFile(url, zipPath, gcfg)
         setStage('deploying', '解压源码包...', 30)
         const extractDir = path.join(packageDir, 'extract')
         extractZip(zipPath, extractDir)
+        pushLog(`解压完成: ${zipPath} → ${extractDir}`)
         const top = fs.readdirSync(extractDir).filter((n) => fs.statSync(path.join(extractDir, n)).isDirectory())
         if (top.length === 1) {
+          const from = path.join(extractDir, top[0])
           const moved = path.join(packageDir, 'source')
-          fs.renameSync(path.join(extractDir, top[0]), moved)
-          fs.rmSync(extractDir, { recursive: true, force: true })
+          try {
+            fs.renameSync(from, moved)
+          } catch {
+            // Windows: 杀毒/索引锁定目录时 rename 报 EPERM；复制以读方式打开文件不受写锁影响
+            pushLog('rename 被占用，改用复制方式归位', 'warn')
+            fs.cpSync(from, moved, { recursive: true, force: true })
+          }
+          pushLog(`源码归位: ${moved}`)
+          try {
+            fs.rmSync(extractDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 })
+          } catch (e: any) {
+            pushLog(`临时目录清理延迟(将由下次 prunePackages 兜底): ${(e as Error).message}`, 'warn')
+          }
         }
         prunePackages(packagesRoot, gcfg.packageKeep)
       }
@@ -671,23 +753,32 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
     }
 
     if (needDeploy && !gitDeployed) {
-      setStage('deploying', `部署文件到 ${deployRoot}...`, 40)
       const srcRoot = packageDir ? path.join(packageDir, 'source') : findLatestPackageSource(app.name)
       if (!srcRoot || !fs.existsSync(srcRoot)) throw new Error('找不到可部署的源码包，请先下载')
       const excludes = app.deploy_excludes ? parseExcludes(app.deploy_excludes) : DEFAULT_DEPLOY_EXCLUDES
+      pushLog(`部署: ${srcRoot} → ${deployRoot} (排除: ${app.deploy_excludes ? '自定义' : '默认'})`)
+      setStage('deploying', `部署文件到 ${deployRoot}...`, 40)
       const res = deployFiles(srcRoot, deployRoot, excludes)
       pushLog(`部署完成: 复制 ${res.copied} 个文件，跳过 ${res.skipped} 个`)
       setStage('deploying', `部署完成 (复制 ${res.copied})`, 50)
     }
 
     if (needInstall) {
-      setStage('installing', `安装依赖 (${app.install_cmd})...`, 55)
-      await runCommand(app.install_cmd, deployRoot, 600, '[install] ')
-      pushLog('依赖安装完成')
-      setStage('installing', '依赖安装完成', 70)
+      if (depsUnchanged(deployRoot)) {
+        pushLog('依赖未变化（package.json/lock 指纹一致），跳过安装')
+        setStage('installing', '依赖未变化，跳过安装', 70)
+      } else {
+        pushLog(`安装依赖: ${app.install_cmd} (目录: ${deployRoot})`)
+        setStage('installing', `安装依赖 (${app.install_cmd})...`, 55)
+        await runCommand(app.install_cmd, deployRoot, 600, '[install] ')
+        saveDepsFingerprint(deployRoot)
+        pushLog('依赖安装完成')
+        setStage('installing', '依赖安装完成', 70)
+      }
     }
 
     if (needBuild) {
+      pushLog(`构建项目: ${app.build_cmd} (目录: ${deployRoot})`)
       setStage('building', `构建项目 (${app.build_cmd})...`, 75)
       await runCommand(app.build_cmd, deployRoot, 600, '[build] ')
       pushLog('构建完成')
@@ -709,16 +800,19 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
       await restartApp(app, deployRoot)
     }
 
+    const elapsed = ((Date.now() - state.startedAt!) / 1000).toFixed(1)
     setStage('done', '任务完成', 100)
-    pushLog('========== 任务执行完成 ==========')
+    pushLog(`========== 任务执行完成，耗时 ${elapsed}s ==========`)
     state.finishedAt = Date.now()
   } catch (e) {
     const msg = (e as Error).message
+    const elapsed = ((Date.now() - state.startedAt!) / 1000).toFixed(1)
+    const failStage = state.stage
     state.stage = 'error'
     state.error = msg
     state.message = `任务失败: ${msg}`
     state.finishedAt = Date.now()
-    pushLog(`任务失败: ${msg}`, 'error')
+    pushLog(`任务失败 [阶段 ${failStage}]: ${msg}（耗时 ${elapsed}s）`, 'error')
   } finally {
     state.running = false
   }
@@ -744,7 +838,7 @@ function prunePackages(root: string, keep: number): void {
     .sort((a, b) => b.name.localeCompare(a.name))
   for (const d of dirs.slice(Math.max(keep, 1))) {
     try {
-      fs.rmSync(d.full, { recursive: true, force: true })
+      fs.rmSync(d.full, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 })
       pushLog(`清理旧部署包: ${d.name}`)
     } catch (e) {
       pushLog(`清理失败: ${d.name} - ${(e as Error).message}`, 'warn')

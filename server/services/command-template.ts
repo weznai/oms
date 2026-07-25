@@ -60,14 +60,18 @@ export function buildPm2Action(action: 'start' | 'restart' | 'stop', app: AppRow
   return `pm2 restart ${app.pm2_app_name} --update-env`
 }
 
-/** 首次启动 Python 应用：pm2 start app.py --name xxx --interpreter python */
+/** 首次启动（进程未在 PM2 中注册时调用） */
 export function buildPm2Start(app: AppRow): string {
   if (app.type === 'python') {
     const interpreter = app.interpreter || 'python'
     const startFile = app.start_file || 'app.py'
     return `pm2 start ${startFile} --name ${app.pm2_app_name} --interpreter ${interpreter}`
   }
-  return `pm2 restart ${app.pm2_app_name} --update-env`
+  // Node.js：指定了入口文件就直接启动，否则用 npm 脚本启动
+  if (app.start_file) {
+    return `pm2 start ${app.start_file} --name ${app.pm2_app_name}`
+  }
+  return `pm2 start npm --name ${app.pm2_app_name} -- run start`
 }
 
 /** 解析部署排除规则（逗号或换行分隔） */
