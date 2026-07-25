@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, SetUp } from '@element-plus/icons-vue'
+import { Plus, SetUp, WarningFilled, Link } from '@element-plus/icons-vue'
 import { appApi, type AppItem, type AppInput, type AppType } from '@/api/app'
+import { updateApi } from '@/api/update'
 import SystemUpdateView from './SystemUpdateView.vue'
 
 const list = ref<AppItem[]>([])
@@ -37,6 +38,7 @@ const form = reactive({
   process_mode: 'pm2' as 'pm2' | 'custom',
   start_cmd: '',
   stop_cmd: '',
+  access_url: '',
   enabled: true,
   remark: ''
 })
@@ -78,7 +80,7 @@ function openCreate(): void {
     repo_url: '', branch: 'main', deploy_path: '', pm2_app_name: '', port: null,
     install_cmd: 'npm install', build_cmd: 'npm run build', build_enabled: true,
     start_file: '', interpreter: '', process_mode: 'pm2', start_cmd: '', stop_cmd: '',
-    enabled: true, remark: ''
+    access_url: '', enabled: true, remark: ''
   })
   excludesText.value = templates.value.nodejs?.deployExcludes || ''
   dialogVisible.value = true
@@ -92,7 +94,7 @@ function openEdit(row: any): void {
     pm2_app_name: row.pm2_app_name, port: row.port, install_cmd: row.install_cmd,
     build_cmd: row.build_cmd, build_enabled: row.build_enabled === 1, start_file: row.start_file,
     interpreter: row.interpreter, process_mode: row.process_mode, start_cmd: row.start_cmd,
-    stop_cmd: row.stop_cmd, enabled: row.enabled === 1, remark: row.remark || ''
+    stop_cmd: row.stop_cmd, access_url: row.access_url || '', enabled: row.enabled === 1, remark: row.remark || ''
   })
   excludesText.value = row.deploy_excludes || ''
   dialogVisible.value = true
@@ -106,7 +108,7 @@ async function handleSubmit(): Promise<void> {
     pm2_app_name: form.pm2_app_name, port: form.port, install_cmd: form.install_cmd,
     build_cmd: form.build_cmd, build_enabled: form.build_enabled, start_file: form.start_file,
     interpreter: form.interpreter, process_mode: form.process_mode, start_cmd: form.start_cmd,
-    stop_cmd: form.stop_cmd, deploy_excludes: excludesText.value,
+    stop_cmd: form.stop_cmd, deploy_excludes: excludesText.value, access_url: form.access_url,
     enabled: form.enabled, remark: form.remark
   }
   if (isEdit.value) {
@@ -120,9 +122,18 @@ async function handleSubmit(): Promise<void> {
   await load()
 }
 
-async function handleToggle(row: any): Promise<void> {
-  await appApi.toggle(row.id, row.enabled !== 1)
-  await load()
+async function handleStartStop(row: any): Promise<void> {
+  const mode = row.runStatus === 'online' ? 'stop' : 'start'
+  try {
+    await ElMessageBox.confirm(
+      `确定对应用「${row.display_name || row.name}」执行${mode === 'start' ? '启动' : '停止'}吗？`,
+      '操作确认',
+      { type: mode === 'stop' ? 'warning' : 'info', confirmButtonText: '确定', cancelButtonText: '取消' }
+    )
+  } catch { return }
+  await appApi.run(row.id, mode)
+  ElMessage.success(mode === 'start' ? '启动指令已发送' : '停止指令已发送')
+  setTimeout(load, 3000)
 }
 
 async function handleDelete(row: any): Promise<void> {
@@ -137,6 +148,14 @@ async function handleDelete(row: any): Promise<void> {
 function goUpdate(row: any): void {
   updateAppId.value = row.id
   updateDrawer.value = true
+}
+
+function autoFillAccessUrl(): void {
+  if (!form.port) {
+    ElMessage.warning('请先填写端口')
+    return
+  }
+  form.access_url = `http://localhost:${form.port}`
 }
 
 function typeTag(t: string): { type: any; label: string } {
@@ -161,28 +180,50 @@ function fmtTime(t: number): string {
   return new Date(t).toLocaleString('zh-CN', { hour12: false })
 }
 
+const installing = ref(false)
+const pm2Missing = computed(() => list.value.some((a) => a.process_mode === 'pm2' && !a.canControl))
+
+async function handleInstallPm2(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('将通过 npm i -g pm2 全局安装 PM2（可能需要 sudo 权限）。是否继续？', '安装 PM2', { type: 'warning' })
+  } catch { return }
+  installing.value = true
+  try {
+    await updateApi.installPm2()
+    ElMessage.success('PM2 安装成功')
+    await load()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '安装失败')
+  } finally {
+    installing.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <template>
   <div>
     <h2 class="page-title">应用管理</h2>
-    <p class="page-subtitle">注册被管理的系统/服务（支持 Node.js、Python 类型），配置后可对其发布、更新、重启、停止</p>
+    <p class="page-subtitle">注册被管理的系统/服务，配置后可启停、更新发布</p>
 
     <el-card shadow="never" class="panel">
       <div class="toolbar">
         <div class="tip">
           <el-icon><SetUp /></el-icon>
           内部系统（本平台自身）与外部系统均可注册，不同类型使用不同命令模板
+          <span v-if="pm2Missing" class="pm2-tip" :class="{ loading: installing }" @click="!installing && handleInstallPm2()">
+            （PM2检测未安装，{{ installing ? '安装中...' : '点击安装' }}）
+          </span>
         </div>
         <el-button type="primary" :icon="Plus" @click="openCreate">注册应用</el-button>
       </div>
 
-      <el-table v-loading="loading" :data="list" stripe row-key="id">
+      <el-table v-loading="loading" :data="list" stripe row-key="id" @row-dblclick="openEdit">
         <el-table-column label="应用" min-width="150">
           <template #default="{ row }">
             <div class="app-name">
-              <span class="enabled-dot" :class="{ off: row.enabled !== 1 }" :title="row.enabled === 1 ? '已启用' : '已停用'"></span>
+              <span class="enabled-dot" :class="{ off: row.runStatus !== 'online' }" :title="row.runStatus === 'online' ? '运行中' : '未运行'"></span>
               <span class="name">{{ row.display_name || row.name }}</span>
               <span class="code">{{ row.name }}</span>
             </div>
@@ -202,6 +243,14 @@ onMounted(load)
         <el-table-column label="端口" width="68">
           <template #default="{ row }">{{ row.port || '-' }}</template>
         </el-table-column>
+        <el-table-column label="访问地址" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link v-if="row.access_url" :href="row.access_url" target="_blank" :underline="false" type="primary" :title="row.access_url" class="access-link">
+              <el-icon style="margin-right:2px"><Link /></el-icon>{{ row.access_url.replace(/^https?:\/\//, '') }}
+            </el-link>
+            <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="运行状态" width="96">
           <template #default="{ row }">
             <el-tag :type="runStatusMeta(row.runStatus).type" :effect="runStatusMeta(row.runStatus).effect" size="small">
@@ -209,13 +258,19 @@ onMounted(load)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="216" class-name="op-cell">
+        <el-table-column label="操作" width="250" class-name="op-cell">
           <template #default="{ row }">
+            <el-button
+              text
+              :type="row.runStatus === 'online' ? 'danger' : 'success'"
+              :disabled="!row.canControl"
+              @click="handleStartStop(row)"
+            >{{ row.runStatus === 'online' ? '停止' : '启动' }}</el-button>
+            <span class="op-sep">|</span>
             <el-button text type="primary" @click="goUpdate(row)">更新</el-button>
+            <span class="op-sep">|</span>
             <el-button text type="info" @click="openEdit(row)">编辑</el-button>
-            <el-button text :type="row.enabled === 1 ? 'warning' : 'success'" @click="handleToggle(row)">
-              {{ row.enabled === 1 ? '停用' : '启用' }}
-            </el-button>
+            <span class="op-sep">|</span>
             <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -239,7 +294,7 @@ onMounted(load)
           </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="应用类型">
               <el-select v-model="form.type" style="width:100%" @change="applyTemplate">
                 <el-option label="Node.js" value="nodejs" />
@@ -248,17 +303,12 @@ onMounted(load)
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="范围">
               <el-radio-group v-model="form.scope">
                 <el-radio-button value="internal">内部</el-radio-button>
                 <el-radio-button value="external">外部</el-radio-button>
               </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="启用">
-              <el-switch v-model="form.enabled" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -288,6 +338,13 @@ onMounted(load)
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="访问地址">
+          <el-input v-model="form.access_url" placeholder="http://host:port，留空则不显示访问链接">
+            <template #append>
+              <el-button @click="autoFillAccessUrl">本地自动</el-button>
+            </template>
+          </el-input>
+        </el-form-item>
 
         <el-divider content-position="left">进程管理</el-divider>
         <el-row :gutter="16">
@@ -362,7 +419,7 @@ onMounted(load)
     <!-- 更新抽屉 -->
     <el-drawer
       v-model="updateDrawer"
-      :title="`${updateApp?.display_name || updateApp?.name || ''} · 应用更新`"
+      :title="`${updateApp?.display_name || updateApp?.name || ''} · 应用发布更新`"
       direction="rtl"
       size="780px"
       destroy-on-close
@@ -385,6 +442,16 @@ onMounted(load)
   gap: 6px;
   color: #909399;
   font-size: 13px;
+}
+.pm2-tip {
+  color: #d97706;
+  background: #fdf6ec;
+  border: 1px solid #f5dab1;
+  padding: 1px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  &.loading { cursor: default; opacity: 0.6; }
 }
 .app-name {
   display: flex;
@@ -409,6 +476,13 @@ onMounted(load)
   .name { font-weight: 600; color: #1e293b; font-size: 13px; }
   .code { font-size: 12px; color: #94a3b8; font-family: 'Cascadia Code', Consolas, monospace; }
 }
+.access-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  font-size: 12px;
+  vertical-align: middle;
+}
 .tags {
   display: flex;
   align-items: center;
@@ -423,11 +497,18 @@ onMounted(load)
 :deep(.op-cell .cell) {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 4px;
   overflow: visible;
 }
 :deep(.op-cell .el-button + .el-button) {
   margin-left: 0;
+}
+.op-sep {
+  color: #dcdfe6;
+  font-size: 12px;
+}
+:deep(.el-input-number .el-input__inner) {
+  text-align: left;
 }
 </style>

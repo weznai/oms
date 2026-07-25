@@ -44,7 +44,7 @@ const stageMeta: Record<string, { label: string; color: string }> = {
   starting: { label: '准备中', color: '#2563eb' },
   downloading: { label: '下载中', color: '#3b82f6' },
   deploying: { label: '部署中', color: '#3b82f6' },
-  installing: { label: '安装依赖', color: '#f59e0b' },
+  installing: { label: '装依赖', color: '#f59e0b' },
   building: { label: '构建中', color: '#06b6d4' },
   restarting: { label: '重启中', color: '#10b981' },
   stopping: { label: '停止中', color: '#ef4444' },
@@ -59,7 +59,7 @@ const actions = computed(() => {
   return [
     { mode: 'download', label: isGit ? 'git拉取' : '下载', desc: isGit ? 'git fetch+reset 到部署目录' : '下载分支压缩包', icon: Download, color: '#3b82f6' },
     { mode: 'deploy', label: '部署', desc: '部署文件到目录', icon: Files, color: '#3b82f6' },
-    { mode: 'install', label: '安装依赖', desc: isPy ? 'pip install' : 'npm install', icon: Box, color: '#f59e0b' },
+    { mode: 'install', label: '装依赖', desc: isPy ? 'pip install' : 'npm install', icon: Box, color: '#f59e0b' },
     { mode: 'build', label: '编译', desc: isPy ? 'Python 通常跳过' : '执行构建', icon: Tools, color: '#06b6d4', disabled: isPy && selectedApp.value.build_enabled !== 1 },
     { mode: 'restart', label: '重启', desc: 'PM2 重启', icon: Refresh, color: '#10b981' },
     { mode: 'stop', label: '停止', desc: 'PM2 停止', icon: SwitchButton, color: '#ef4444', danger: true }
@@ -112,7 +112,7 @@ async function scrollLog(): Promise<void> {
 }
 
 const modeTextMap: Record<string, string> = {
-  full: '一键更新（拉取→安装→构建→重启）',
+  full: '一键发布更新（拉取→装依赖→构建→重启）',
   download: '拉取源码', deploy: '部署文件', install: '安装依赖',
   build: '编译构建', restart: '重启服务', stop: '停止服务'
 }
@@ -273,7 +273,7 @@ onUnmounted(stopPolling)
 
       <div class="hero-action">
         <el-button type="primary" class="full-btn" :loading="state.running" :disabled="!canAct" @click="runFull">
-          <el-icon style="margin-right:5px"><RefreshRight /></el-icon>一键更新
+          <el-icon style="margin-right:5px"><RefreshRight /></el-icon>一键发布更新
         </el-button>
         <div class="hero-hint">完整执行：{{ source === 'git' ? 'git 拉取' : '下载 → 部署' }} → 安装 → 构建 → 重启</div>
       </div>
