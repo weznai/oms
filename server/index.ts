@@ -32,13 +32,13 @@ async function bootstrap(): Promise<void> {
     credentials: true
   }))
 
-  // 慢请求诊断：记录处理耗时超过 100ms 的 /api 请求（用于区分 服务端慢 vs 网络慢）
+  // 慢请求诊断：记录每个 /api 请求的处理耗时（临时，用于区分 服务端慢 vs 网络慢）
   app.use((req, res, next) => {
     const start = Date.now()
     res.on('finish', () => {
       const dur = Date.now() - start
-      if (dur > 100 && req.path.startsWith('/api')) {
-        logger.info(`[SLOW ${dur}ms] ${req.method} ${req.originalUrl}`)
+      if (req.path.startsWith('/api')) {
+        logger.info(`[API ${dur}ms] ${req.method} ${req.originalUrl}`)
       }
     })
     next()
