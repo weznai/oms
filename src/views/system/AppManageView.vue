@@ -269,7 +269,7 @@ onMounted(load)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" class-name="op-cell">
+        <el-table-column label="操作" width="260" class-name="op-cell">
           <template #default="{ row }">
             <el-button
               text
@@ -280,9 +280,7 @@ onMounted(load)
             <span class="op-sep">|</span>
             <el-button text type="primary" @click="goUpdate(row)">更新</el-button>
             <span class="op-sep">|</span>
-            <el-button text type="info" :icon="Document" @click="goLogs(row)">日志</el-button>
-            <span class="op-sep">|</span>
-            <el-button text type="info" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="warning" :icon="Document" @click="goLogs(row)">日志</el-button>
             <span class="op-sep">|</span>
             <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
