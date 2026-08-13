@@ -747,7 +747,7 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
             pushLog(`临时目录清理延迟(将由下次 prunePackages 兜底): ${(e as Error).message}`, 'warn')
           }
         }
-        prunePackages(packagesRoot, gcfg.packageKeep)
+        prunePackages(packagesRoot, gcfg.packageKeep, app.name, packageDir)
       }
       pushLog('下载阶段完成')
     }
@@ -831,12 +831,16 @@ function findLatestPackageSource(appName: string): string | null {
   return fs.existsSync(sourceDir) ? sourceDir : dirs[0].full
 }
 
-function prunePackages(root: string, keep: number): void {
+function prunePackages(root: string, keep: number, appName: string, protectDir?: string): void {
+  const prefix = `${appName}_`
+  const protect = protectDir ? path.resolve(protectDir) : ''
   const dirs = fs.readdirSync(root)
+    .filter((n) => n.startsWith(prefix))
     .map((n) => ({ name: n, full: path.join(root, n) }))
     .filter((d) => fs.statSync(d.full).isDirectory())
     .sort((a, b) => b.name.localeCompare(a.name))
   for (const d of dirs.slice(Math.max(keep, 1))) {
+    if (protect && path.resolve(d.full) === protect) continue
     try {
       fs.rmSync(d.full, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 })
       pushLog(`清理旧部署包: ${d.name}`)
