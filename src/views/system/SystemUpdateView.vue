@@ -34,7 +34,7 @@ const testing = ref(false)
 const probing = ref(false)
 const checking = ref(false)
 const envInfo = ref<{ shell?: any; packages?: any }>({})
-const source = ref<'zip' | 'git'>('git')
+const source = ref<'zip' | 'git'>('zip')
 
 function emptyState(): UpdateState {
   return {
@@ -309,7 +309,7 @@ onUnmounted(stopPolling)
         <span class="source-label">拉取方式</span>
         <el-radio-group v-model="source" size="small">
           <el-radio-button value="zip">下载包 (zip)</el-radio-button>
-          <el-radio-button value="git">git pull</el-radio-button>
+          <el-radio-button value="git" disabled>git pull（暂未启用）</el-radio-button>
         </el-radio-group>
         <span class="source-hint">{{ source === 'git' ? '直接在部署目录 git fetch+reset（需目录已是 git 仓库）' : '下载分支压缩包，解压后部署到目录' }}</span>
       </div>
