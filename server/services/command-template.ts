@@ -57,7 +57,7 @@ export const COMMAND_TEMPLATES: Record<AppType, CommandTemplate> = {
 export function buildPm2Action(action: 'start' | 'restart' | 'stop', app: AppRow): string {
   if (action === 'stop') return `pm2 stop ${app.pm2_app_name}`
   if (action === 'start') return buildPm2Start(app)
-  return `pm2 restart ${app.pm2_app_name} --update-env`
+  return `pm2 restart ${app.pm2_app_name}`
 }
 
 /** 首次启动（进程未在 PM2 中注册时调用） */

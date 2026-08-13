@@ -118,7 +118,7 @@ MySQL 源库 ──► 读取表列表 ──► 逐表处理：
 
 | 类型 | 安装 | 构建 | PM2 重启 |
 |---|---|---|---|
-| Node.js | `npm install` | `npm run build`（默认启用） | `pm2 restart <name> --update-env` |
+| Node.js | `npm install` | `npm run build`（默认启用） | `pm2 restart <name>` |
 | Python | `pip install -r requirements.txt` | 无（默认停用） | `pm2 restart <name>`（首次 `pm2 start app.py --name <name> --interpreter python`） |
 
 模板可通过 `GET /api/apps/templates` 获取，前端新建应用时按类型自动套用。
