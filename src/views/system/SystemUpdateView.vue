@@ -91,6 +91,7 @@ async function loadStatus(): Promise<void> {
   if (wasRunning && !res.data.running) {
     if (res.data.stage === 'done') ElMessage.success(`[${res.data.appName}] 任务执行完成`)
     else if (res.data.stage === 'error') ElMessage.error(res.data.error || '任务失败')
+    else ElMessage.info('任务已派发完成（服务重启导致内存状态归零，自更新场景属正常，请稍后刷新验证新版本）')
     stopPolling()
     await loadApps()
   }
@@ -114,9 +115,24 @@ async function loadEnv(): Promise<void> {
 
 watch(() => props.appId, () => { loadEnv() })
 
+const pollFailCount = ref(0)
+
 function startPolling(): void {
   if (polling.value) return
-  polling.value = window.setInterval(loadStatus, 2000)
+  pollFailCount.value = 0
+  polling.value = window.setInterval(async () => {
+    try {
+      await loadStatus()
+      pollFailCount.value = 0
+    } catch {
+      // 任务执行期间请求失败：多为 PM2 重启目标/自身服务的短暂中断，静默重试
+      pollFailCount.value++
+      if (pollFailCount.value >= 20) {
+        stopPolling()
+        ElMessage.info('服务重启中，状态轮询已停止，请稍后刷新页面验证结果')
+      }
+    }
+  }, 2000)
 }
 function stopPolling(): void {
   if (polling.value) { clearInterval(polling.value); polling.value = null }

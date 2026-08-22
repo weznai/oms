@@ -21,7 +21,7 @@ http.interceptors.response.use(
     const body = res.data
     if (body && typeof body === 'object' && 'code' in body) {
       if (body.code === 0) return body
-      ElMessage.error(body.message || '请求失败')
+      if (!(res.config as any)?.skipErrorToast) ElMessage.error(body.message || '请求失败')
       return Promise.reject(new Error(body.message || '请求失败'))
     }
     return body
@@ -34,7 +34,7 @@ http.interceptors.response.use(
       auth.logout()
       ElMessage.error('登录已过期，请重新登录')
       router.push({ name: 'login' })
-    } else {
+    } else if (!(err.config as any)?.skipErrorToast) {
       ElMessage.error(msg || '网络异常')
     }
     return Promise.reject(err)

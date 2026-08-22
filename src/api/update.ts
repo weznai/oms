@@ -10,7 +10,7 @@ export interface GlobalUpdateConfig {
 }
 
 export const updateApi = {
-  status: () => http.get('/system/update/status'),
+  status: () => http.get('/system/update/status', { skipErrorToast: true } as any),
   config: () => http.get<any, { data: GlobalUpdateConfig }>('/system/update/config'),
   saveConfig: (data: Partial<GlobalUpdateConfig>) => http.post('/system/update/config', data),
   testGithub: (appId: number) => http.get('/system/update/test-github', { params: { appId } }),
