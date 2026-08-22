@@ -498,6 +498,12 @@ onUnmounted(stopPolling)
   .action-label { font-size: 12.5px; font-weight: 600; color: #1e293b; white-space: nowrap; }
 }
 .log-head-actions { display: flex; align-items: center; gap: 8px; }
+/* 更新日志终端字体缩小 */
+.update-page .terminal {
+  font-size: 11.5px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
 .global-hint { font-size: 12px; color: #94a3b8; }
 .ssl-control { display: flex; align-items: center; gap: 8px; }
 .hint { font-size: 12px; color: #909399; white-space: nowrap; }
