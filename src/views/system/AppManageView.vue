@@ -339,7 +339,7 @@ onMounted(load)
         <el-divider content-position="left">进程管理</el-divider>
         <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="管理方式">
+            <el-form-item label="管理方式" label-width="72px">
               <el-radio-group v-model="form.process_mode">
                 <el-radio-button value="pm2">PM2</el-radio-button>
                 <el-radio-button value="custom">自定义命令</el-radio-button>

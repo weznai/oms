@@ -260,6 +260,12 @@ onUnmounted(stopPolling)
           <span class="meta-item" v-if="selectedApp.repo_url">
             <span class="meta-k">仓库</span><span class="meta-v repo-v">{{ selectedApp.repo_url }} ({{ selectedApp.branch }})</span>
           </span>
+          <span class="meta-item" v-if="envInfo.packages?.dir">
+            <span class="meta-k">部署目录</span><span class="meta-v repo-v">{{ envInfo.packages.dir }}</span>
+          </span>
+          <span class="meta-item" v-if="envInfo.packages">
+            <span class="meta-k">部署包</span><span class="meta-v">{{ envInfo.packages.count ?? 0 }} 个</span>
+          </span>
         </div>
       </div>
       <div class="status-banner" :style="{ '--stage-color': stageInfo.color }">
@@ -281,9 +287,11 @@ onUnmounted(stopPolling)
       </div>
     </el-card>
 
-    <!-- 运行控制 -->
+    <!-- 启停 · 更新 -->
     <el-card shadow="never" class="panel" v-if="selectedApp">
-      <template #header><span class="panel-title"><el-icon style="margin-right:4px;vertical-align:-2px;color:#22c55e"><SwitchButton /></el-icon>运行控制</span></template>
+      <template #header><span class="panel-title"><el-icon style="margin-right:4px;vertical-align:-2px;color:#2563eb"><Upload /></el-icon>启停 · 更新</span></template>
+
+      <div class="grid-caption">进程启停</div>
       <div class="action-grid cols-3">
         <div
           v-for="a in runActions"
@@ -293,34 +301,26 @@ onUnmounted(stopPolling)
           @click="(!a.disabled && canAct) ? run(a.mode) : null"
         >
           <div class="action-icon" :style="{ background: a.color }">
-            <el-icon :size="15"><component :is="a.icon" /></el-icon>
+            <el-icon :size="12"><component :is="a.icon" /></el-icon>
           </div>
-          <div class="action-text">
-            <div class="action-label">{{ a.label }}</div>
-          </div>
+          <span class="action-label">{{ a.label }}</span>
         </div>
       </div>
-    </el-card>
 
-    <!-- 发布更新 -->
-    <el-card shadow="never" class="panel" v-if="selectedApp">
-      <template #header><span class="panel-title"><el-icon style="margin-right:4px;vertical-align:-2px;color:#2563eb"><Upload /></el-icon>发布更新</span></template>
-      <div class="source-bar">
-        <span class="source-label">拉取方式</span>
-        <el-radio-group v-model="source" size="small">
-          <el-radio-button value="zip">下载包 (zip)</el-radio-button>
-          <el-radio-button value="git" disabled>git pull（暂未启用）</el-radio-button>
-        </el-radio-group>
-        <span class="source-hint">{{ source === 'git' ? '直接在部署目录 git fetch+reset（需目录已是 git 仓库）' : '下载分支压缩包，解压后部署到目录' }}</span>
-      </div>
-
-      <div class="hero-action">
+      <div class="hero-row">
         <el-button type="primary" class="full-btn" :loading="state.running" :disabled="!canAct" @click="runFull">
           <el-icon style="margin-right:5px"><RefreshRight /></el-icon>一键发布更新
         </el-button>
-        <div class="hero-hint">完整执行：{{ source === 'git' ? 'git 拉取' : '下载 → 部署' }} → 安装 → 构建 → 重启</div>
+        <div class="hero-side">
+          <el-radio-group v-model="source" size="small">
+            <el-radio-button value="zip">下载包 (zip)</el-radio-button>
+            <el-radio-button value="git" disabled>git pull（暂未启用）</el-radio-button>
+          </el-radio-group>
+          <div class="hero-hint">完整执行：{{ source === 'git' ? 'git 拉取' : '下载 → 部署' }} → 安装 → 构建 → 重启</div>
+        </div>
       </div>
 
+      <div class="grid-caption">分步更新（{{ source === 'git' ? 'git 拉取' : '下载包' }}）</div>
       <div class="action-grid cols-4">
         <div
           v-for="a in updateActions"
@@ -330,11 +330,9 @@ onUnmounted(stopPolling)
           @click="(!a.disabled && canAct) ? run(a.mode) : null"
         >
           <div class="action-icon" :style="{ background: a.color }">
-            <el-icon :size="15"><component :is="a.icon" /></el-icon>
+            <el-icon :size="12"><component :is="a.icon" /></el-icon>
           </div>
-          <div class="action-text">
-            <div class="action-label">{{ a.label }}</div>
-          </div>
+          <span class="action-label">{{ a.label }}</span>
         </div>
       </div>
     </el-card>
@@ -405,52 +403,25 @@ onUnmounted(stopPolling)
         </div>
       </el-collapse-transition>
     </el-card>
-
-    <el-card v-if="selectedApp" shadow="never" class="panel">
-      <template #header><span class="panel-title">{{ selectedApp.name }} 部署包</span></template>
-      <el-descriptions :column="2" border size="small">
-        <el-descriptions-item label="操作系统">{{ envInfo.shell?.os }}</el-descriptions-item>
-        <el-descriptions-item label="Shell">{{ envInfo.shell?.shell }}</el-descriptions-item>
-        <el-descriptions-item label="部署目录">{{ envInfo.packages?.dir }}</el-descriptions-item>
-        <el-descriptions-item label="部署包数量">{{ envInfo.packages?.count }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
   </div>
 </template>
 
 <style scoped lang="scss">
 .update-page :deep(.el-card) { border-radius: 6px; }
 .update-page :deep(.el-card__body) { padding: 8px 14px; }
-.update-page :deep(.el-card__header) { padding: 7px 14px; min-height: 32px; }
+.update-page :deep(.el-card__header) { padding: 6px 14px; min-height: 30px; }
 .update-page .panel { margin-bottom: 10px; }
 .update-page .panel:last-child { margin-bottom: 0; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; }
-.panel-title { font-weight: 600; }
+.panel-title { font-weight: 600; font-size: 14px; }
 
-/* 应用选择卡 */
-.app-bar {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-.app-bar-left {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  .bar-label {
-    font-size: 12px;
-    color: #94a3b8;
-    font-weight: 500;
-  }
-  .app-select-box { width: 240px; }
-}
+/* 应用信息卡 */
 .app-info-bar {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   .info-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-  .info-meta { display: flex; gap: 22px; flex-wrap: wrap; }
+  .info-meta { display: flex; gap: 16px; flex-wrap: wrap; }
   .meta-item { display: flex; align-items: baseline; gap: 6px; }
   .meta-k {
     font-size: 11px;
@@ -459,7 +430,7 @@ onUnmounted(stopPolling)
     padding: 1px 6px;
     border-radius: 4px;
   }
-  .meta-v { font-size: 13px; color: #475569; }
+  .meta-v { font-size: 12.5px; color: #475569; }
   .repo-v { font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; color: #64748b; }
 }
 
@@ -467,74 +438,64 @@ onUnmounted(stopPolling)
 .status-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 7px 10px;
   border-radius: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--stage-color) 10%, transparent), color-mix(in srgb, var(--stage-color) 4%, transparent));
   border: 1px solid color-mix(in srgb, var(--stage-color) 22%, transparent);
   .status-dot {
-    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; position: relative;
+    width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; position: relative;
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--stage-color) 18%, transparent);
     .pulse { position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: pulse 1.4s ease-out infinite; }
   }
   .status-main { flex-shrink: 0; }
-  .status-stage { font-size: 15px; font-weight: 600; color: #1e293b; }
+  .status-stage { font-size: 14px; font-weight: 600; color: #1e293b; }
   .run-app { color: #94a3b8; font-weight: 400; font-size: 12px; }
-  .status-msg { font-size: 12px; color: #64748b; margin-top: 2px; }
-  .status-warn { font-size: 12px; color: #d97706; margin-top: 3px; }
+  .status-msg { font-size: 12px; color: #64748b; margin-top: 1px; }
+  .status-warn { font-size: 12px; color: #d97706; margin-top: 2px; }
   .status-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .status-refresh { flex-shrink: 0; color: #94a3b8; }
-  .status-progress { flex: 1; max-width: 340px; .progress-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 3px; text-align: right; } }
+  .status-progress { flex: 1; max-width: 320px; .progress-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 2px; text-align: right; } }
 }
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
 
-/* 一键更新 */
-.source-bar {
+/* 启停 · 更新 */
+.grid-caption { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+.hero-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  padding: 6px 12px;
-  background: #f8fafc;
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  .source-label { font-size: 13px; font-weight: 600; color: #475569; flex-shrink: 0; }
-  .source-hint { font-size: 12px; color: #94a3b8; }
-}
-
-/* 一键更新 */
-.hero-action {
-  text-align: center;
-  margin-bottom: 8px;
+  gap: 14px;
+  margin: 8px 0;
   .full-btn {
-    height: 32px; padding: 0 24px; font-size: 13px; font-weight: 600; letter-spacing: 1px;
+    height: 30px; padding: 0 18px; font-size: 13px; font-weight: 600; letter-spacing: 1px; flex-shrink: 0;
     border: none; background: var(--brand-grad);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
-    &:hover { box-shadow: 0 8px 22px rgba(37, 99, 235, 0.4); transform: translateY(-1px); }
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+    &:hover { box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38); transform: translateY(-1px); }
     &:disabled { box-shadow: none; }
   }
-  .hero-hint { margin-top: 8px; font-size: 12px; color: #c0c4cc; }
+  .hero-side { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+  .hero-hint { font-size: 11px; color: #b1b7c0; }
 }
 
-/* 操作卡 */
+/* 操作按钮（紧凑） */
 .action-grid { display: grid; gap: 6px; }
 .action-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .action-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .action-card {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border: 1px solid var(--border-light); border-radius: 6px; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 6px;
+  border: 1px solid var(--border-light); border-radius: 5px; cursor: pointer; transition: all 0.2s;
   background: #fff;
-  &:hover { border-color: var(--brand-1); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(37, 99, 235, 0.14); }
-  &:hover .action-icon { transform: scale(1.08); }
-  &.danger:hover { border-color: #ef4444; box-shadow: 0 6px 14px rgba(239, 68, 68, 0.14); }
+  &:hover { border-color: var(--brand-1); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(37, 99, 235, 0.12); }
+  &:hover .action-icon { transform: scale(1.06); }
+  &.danger:hover { border-color: #ef4444; box-shadow: 0 3px 8px rgba(239, 68, 68, 0.12); }
   &.disabled { opacity: 0.45; cursor: not-allowed; &:hover { transform: none; box-shadow: none; border-color: var(--border-light); } }
   .action-icon {
-    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 5px; display: flex; align-items: center; justify-content: center;
     color: #fff; flex-shrink: 0; transition: transform 0.2s;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   }
-  .action-label { font-size: 13px; font-weight: 600; color: #1e293b; }
+  .action-label { font-size: 12.5px; font-weight: 600; color: #1e293b; white-space: nowrap; }
 }
 .log-head-actions { display: flex; align-items: center; gap: 8px; }
 .global-hint { font-size: 12px; color: #94a3b8; }

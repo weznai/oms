@@ -32,3 +32,6 @@ deploy/
 # 自动生成
 auto-imports.d.ts
 components.d.ts
+
+# 运维文档（内部资料，不入库）
+docs/ops-server.md
