@@ -353,12 +353,12 @@ function saveDepsFingerprint(deployRoot: string): void {
 }
 
 // ============ 执行命令 ============
-function runCommand(cmd: string, cwd: string, timeout: number, logPrefix = ''): Promise<void> {
+function runCommand(cmd: string, cwd: string, timeout: number, logPrefix = '', extraEnv?: Record<string, string>): Promise<void> {
   return new Promise((resolve, reject) => {
     const isWin = process.platform === 'win32'
     const shell = isWin ? 'cmd.exe' : '/bin/bash'
     const shellArg = isWin ? ['/c', cmd] : ['-c', cmd]
-    const child: ChildProcess = spawn(shell, shellArg, { cwd, windowsHide: true })
+    const child: ChildProcess = spawn(shell, shellArg, { cwd, windowsHide: true, env: extraEnv ? { ...process.env, ...extraEnv } : process.env })
     let killed = false
     const timer = setTimeout(() => {
       killed = true
@@ -770,7 +770,8 @@ async function executeUpdate(app: AppRow, mode: UpdateMode, gcfg: GlobalUpdateCo
       } else {
         pushLog(`安装依赖: ${app.install_cmd} (目录: ${deployRoot})`)
         setStage('installing', `安装依赖 (${app.install_cmd})...`, 55)
-        await runCommand(app.install_cmd, deployRoot, 600, '[install] ')
+        // 强制 NODE_ENV=development：PM2 生产环境下 npm 会裁掉 devDependencies（tsx/vite 等），导致构建/启动失败
+        await runCommand(app.install_cmd, deployRoot, 600, '[install] ', { NODE_ENV: 'development' })
         saveDepsFingerprint(deployRoot)
         pushLog('依赖安装完成')
         setStage('installing', '依赖安装完成', 70)
