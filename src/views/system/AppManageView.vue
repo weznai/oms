@@ -425,7 +425,6 @@ onMounted(load)
       size="780px"
       destroy-on-close
       class="update-drawer"
-      :body-style="{ padding: '0 14px' }"
     >
       <SystemUpdateView v-if="updateAppId" :app-id="updateAppId" />
     </el-drawer>
@@ -438,7 +437,10 @@ onMounted(load)
 <style scoped lang="scss">
 .update-drawer :deep(.el-drawer__header) {
   margin-bottom: 0;
-  padding: 8px 16px;
+  padding: 10px 16px 4px;
+}
+.update-drawer :deep(.el-drawer__body) {
+  padding: 0 14px;
 }
 .toolbar {
   display: flex;

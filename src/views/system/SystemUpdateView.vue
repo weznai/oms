@@ -424,9 +424,9 @@ onUnmounted(stopPolling)
 
 <style scoped lang="scss">
 .update-page :deep(.el-card) { border-radius: 6px; }
-.update-page :deep(.el-card__body) { padding: 8px 14px; }
-.update-page :deep(.el-card__header) { padding: 6px 14px; min-height: 30px; }
-.update-page .panel { margin-bottom: 10px; }
+.update-page :deep(.el-card__body) { padding: 10px 14px; }
+.update-page :deep(.el-card__header) { padding: 7px 14px; min-height: 32px; }
+.update-page .panel { margin-bottom: 14px; }
 .update-page .panel:last-child { margin-bottom: 0; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; }
 .panel-title { font-weight: 600; font-size: 14px; }
@@ -477,14 +477,14 @@ onUnmounted(stopPolling)
 @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
 
 /* 启停 · 更新 */
-.grid-caption { font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+.grid-caption { font-size: 11px; color: #94a3b8; margin: 4px 0 7px; }
 .hero-row {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 8px 0;
+  margin: 12px 0;
   .full-btn {
-    height: 30px; padding: 0 18px; font-size: 13px; font-weight: 600; letter-spacing: 1px; flex-shrink: 0;
+    height: 32px; padding: 0 20px; font-size: 13px; font-weight: 600; letter-spacing: 1px; flex-shrink: 0;
     border: none; background: var(--brand-grad);
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
     &:hover { box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38); transform: translateY(-1px); }
@@ -495,11 +495,11 @@ onUnmounted(stopPolling)
 }
 
 /* 操作按钮（紧凑） */
-.action-grid { display: grid; gap: 6px; }
+.action-grid { display: grid; gap: 8px; }
 .action-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .action-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .action-card {
-  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 6px;
+  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 8px;
   border: 1px solid var(--border-light); border-radius: 5px; cursor: pointer; transition: all 0.2s;
   background: #fff;
   &:hover { border-color: var(--brand-1); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(37, 99, 235, 0.12); }
